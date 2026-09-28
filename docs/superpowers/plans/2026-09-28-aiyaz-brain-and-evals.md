@@ -1,5 +1,7 @@
 # Aiyaz Brain and Evals Implementation Plan
 
+> **Superseded 2026-09-28.** Written for Python before Imran switched Aiyaz to TypeScript + Evalite and chose to build directly. Kept for its rules (guards, limits, fallback), which carried over. The code on this branch is the source of truth.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build Aiyaz's brain as a text conversation you can talk to in the terminal, with structured notes, hard limits, a model fallback chain and tracing on every model call. Then build the eval suite (25 simulated prospects, exact code checks, model-graded checks), a CI merge gate, and a hand-grading round that measures how often the model judge agrees with Imran.
