@@ -101,7 +101,7 @@ every conversation and summary goes to Imran.
 
 ## 4. Voice layer (phase 2)
 
-LiveKit Agents (Python) for the realtime room and turn-taking. Speech-to-text: Deepgram.
+LiveKit Agents (Node) for the realtime room and turn-taking. Speech-to-text: Deepgram.
 Voice: two providers compared by ear before choosing. The name is given a pronunciation
 hint ("Ayaz") and tested once. If voice fails at any point, the conversation continues in
 text.
@@ -135,7 +135,9 @@ conversation, plus a diagram of the pieces and links into the repo.
 
 ## Stack
 
-- Agent, pipeline, evals: Python.
+- Agent, pipeline, evals: TypeScript (Node). Switched from Python by Imran on 2026-09-28 so the
+  code matches his site and he can maintain it.
+- Evals: Evalite (TypeScript, built on Vitest), local results UI, score threshold gate in CI.
 - Database: Postgres on Neon.
 - Tracing: Langfuse.
 - Email: Resend.
@@ -166,8 +168,7 @@ Accounts Imran provides: Anthropic, Neon, Langfuse, Resend, Fly. Voice accounts
 
 ## Open items
 
-- Conversation model: this design says Claude Sonnet 5 for speed and cost in live voice.
-  Claude Opus 5 is the more capable default. Imran to confirm; the model is one config value.
+- Conversation model: claude-sonnet-5, confirmed by Imran 2026-09-28.
 
 - Eval pass threshold: set after the first full run shows the baseline.
 - Booking link and email address: still placeholders on the website.
