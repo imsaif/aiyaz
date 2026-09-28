@@ -22,7 +22,7 @@
 - Judge model and prospect-simulator model: `claude-sonnet-5` (config values `judge_model`, `simulator_model`). Chosen as the balanced middle on cost and quality for a gate that runs on every PR. Known risk: the judge is the same model as the one under test (self-preference). The grading round's judge-vs-Imran agreement rate is the check on that; if agreement on a judge check falls below 90%, switch `AIYAZ_JUDGE_MODEL=claude-opus-5` first.
 - Prices per 1M tokens, in `config.MODEL_PRICES` only: Sonnet 5 $2 in / $10 out; Haiku 4.5 $1 in / $5 out; Opus 5 $5 in / $25 out. Cache writes are billed at 1.25x input, cache reads at 0.1x input. Cost is computed from `response.model` (the model that actually served the call) and `response.usage`. An unknown model raises; it never counts as $0.
 - Sonnet 5 and Opus 5 requests send `thinking={"type": "disabled"}` (live voice later needs low latency, and discovery questions do not need extended reasoning). Haiku 4.5 requests send no `thinking` key. No request ever sends `budget_tokens`. No assistant prefill anywhere.
-- The Anthropic client is built with `max_retries=0` for the conversation. `FallbackLLM` owns retries: one retry on the conversation model, then one attempt on `claude-haiku-4-5`. Retry and fall back on timeout, connection error, 5xx (including 529 overloaded) and 429. Never on any other 4xx (400, 401, 403, 404, 413): those raise `FatalLLMError` immediately.
+- The Anthropic client is built with `max_retries=0` for the conversation. `FallbackLLM` owns retries: one retry on the conversation model, then one attempt on `claude-haiku-4-5`. Retry and fall back on timeout, connection error and 5xx (including 529 overloaded). Never on any 4xx (400, 401, 403, 404, 413, and 429 too): those raise `FatalLLMError` immediately and the user gets the fixed error line. Whether a 429 should fall back to Haiku is an open question for Imran; changing it is one line in `classify_error` plus one test case. The retry on the conversation model waits a jittered `retry_delay_s` (default 1.0s, 0.5x to 1.5x); there is no wait before the Haiku attempt.
 - SDK exceptions are caught most-specific first (`APITimeoutError` before `APIConnectionError`), never matched by message string. Tool inputs are read as dicts from `block.input`, never parsed from text.
 - Limits (config): 10-minute cap (`max_seconds=600`), turn cap (`max_turns=20` prospect turns), per-conversation cost cap (`cost_cap_usd=1.00`, an initial value to revisit once the first eval run gives a measured median), `max_input_chars=4000`, `max_tool_rounds=4` per turn, `request_timeout_s=30` (SDK timeout units are seconds).
 - Eval gate threshold `eval_pass_threshold` starts at `0.0`. **Set it after the first full eval run**, to the measured baseline minus the noise floor. With 25 personas x 1 rep the 95% noise floor on a pass rate is about +/-20 points, so raise `eval_reps` before trusting small movements.
@@ -191,7 +191,9 @@ class AllModelsFailed(Exception): attempts: list[dict[str, str | None]]
 @dataclass
 class LLMCall: response: Any; requested_model: str; served_model: str; attempts: list[dict[str, str | None]]; fallback_used: bool; latency_ms: int
 class FallbackLLM:
-    def __init__(self, llm: LLMClient, *, primary_model: str, fallback_model: str, timer: Callable[[], float] = time.perf_counter)
+    def __init__(self, llm: LLMClient, *, primary_model: str, fallback_model: str,
+                 retry_delay_s: float = 1.0, sleep: Callable[[float], None] = time.sleep,
+                 timer: Callable[[], float] = time.perf_counter)
     def create(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, max_tokens: int) -> LLMCall
 
 # limits.py
@@ -436,6 +438,7 @@ def test_defaults_match_spec():
     assert s.max_seconds == 600
     assert s.max_turns == 20
     assert s.cost_cap_usd == 1.0
+    assert s.retry_delay_s == 1.0
     assert s.eval_pass_threshold == 0.0
     assert s.tracer == "jsonl"
 
@@ -572,6 +575,8 @@ class Settings:
     max_input_chars: int = 4000
     max_tool_rounds: int = 4
     request_timeout_s: float = 30.0
+    # Wait before retrying the conversation model, jittered 0.5x to 1.5x. 0 disables (tests).
+    retry_delay_s: float = 1.0
 
     # Evals. The threshold starts at 0.0 and is set after the first full run
     # shows the baseline (spec open item).
@@ -625,6 +630,8 @@ def _validate(s: Settings) -> None:
             raise ConfigError(f"{name} must be at least 1")
     if s.cost_cap_usd <= 0 or s.request_timeout_s <= 0:
         raise ConfigError("cost_cap_usd and request_timeout_s must be positive")
+    if s.retry_delay_s < 0:
+        raise ConfigError("retry_delay_s must not be negative")
     if not s.agent_name.strip():
         raise ConfigError("agent_name must not be empty")
 
@@ -1815,7 +1822,7 @@ git commit -m "Add price and name guards shared by the engine and the evals"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `LLMClient` protocol (`create(**params) -> response`), `RetryableLLMError`, `FatalLLMError`, `classify_error(exc) -> type | None`, `AnthropicLLM(*, timeout_s, max_retries=0, client=None)`, `build_request(*, model, system, messages, tools, max_tokens) -> dict`. Test doubles in `tests/fakes.py`: `make_usage`, `text_block`, `tool_block`, `make_response`, `FakeLLM(script)` (records a deep copy of every call's params in `.calls`, fills `response.model` with the requested model when the scripted response leaves it `None`), `FakeClock`.
+- Produces: `LLMClient` protocol (`create(**params) -> response`), `RetryableLLMError`, `FatalLLMError`, `classify_error(exc) -> type | None`, `AnthropicLLM(*, timeout_s, max_retries=0, client=None)`, `build_request(*, model, system, messages, tools, max_tokens) -> dict`. `classify_error` maps timeouts, connection errors and 5xx to `RetryableLLMError`, and every 4xx (429 included) to `FatalLLMError`. Test doubles in `tests/fakes.py`: `make_usage`, `text_block`, `tool_block`, `make_response`, `FakeLLM(script)` (records a deep copy of every call's params in `.calls`, fills `response.model` with the requested model when the scripted response leaves it `None`), `FakeClock`.
 
 - [ ] **Step 1: Write the test doubles**
 
@@ -1915,7 +1922,7 @@ def status_error(cls, code):
     [
         (anthropic.APITimeoutError(request=REQ), RetryableLLMError),
         (anthropic.APIConnectionError(request=REQ), RetryableLLMError),
-        (status_error(anthropic.RateLimitError, 429), RetryableLLMError),
+        (status_error(anthropic.RateLimitError, 429), FatalLLMError),
         (status_error(anthropic.InternalServerError, 500), RetryableLLMError),
         (status_error(anthropic.APIStatusError, 529), RetryableLLMError),
         (status_error(anthropic.BadRequestError, 400), FatalLLMError),
@@ -2001,11 +2008,12 @@ class LLMClient(Protocol):
 
 
 class RetryableLLMError(Exception):
-    """Timeout, connection error, 429 or 5xx (including 529 overloaded). A retry or another model may work."""
+    """Timeout, connection error or 5xx (including 529 overloaded). A retry or another model may work."""
 
 
 class FatalLLMError(Exception):
-    """Any other 4xx (400, 401, 403, 404, 413). Retrying or switching model will not help."""
+    """Any 4xx, including 429. Never retried or sent to the fallback model (the brief lists only
+    timeouts, 5xx, overload and connection errors as fallback triggers)."""
 
 
 def classify_error(exc: BaseException) -> type[Exception] | None:
@@ -2016,9 +2024,8 @@ def classify_error(exc: BaseException) -> type[Exception] | None:
         return RetryableLLMError
     if isinstance(exc, anthropic.APIConnectionError):
         return RetryableLLMError
-    if isinstance(exc, anthropic.RateLimitError):
-        return RetryableLLMError
     if isinstance(exc, anthropic.APIStatusError):
+        # 5xx (including 529 overloaded) is retryable. Every 4xx, 429 included, is fatal.
         return RetryableLLMError if exc.status_code >= 500 else FatalLLMError
     return None
 
@@ -2089,7 +2096,7 @@ git commit -m "Add the LLM adapter, typed error classes and one request builder"
 
 **Interfaces:**
 - Consumes: `LLMClient`, `RetryableLLMError`, `FatalLLMError`, `build_request` from `aiyaz.llm`; `FakeLLM`, `make_response`, `text_block` from `tests.fakes`.
-- Produces: `AllModelsFailed(attempts)`, `LLMCall(response, requested_model, served_model, attempts, fallback_used, latency_ms)`, `FallbackLLM(llm, *, primary_model, fallback_model, timer=time.perf_counter)` with `create(*, system, messages, tools, max_tokens) -> LLMCall`. Attempt order: primary, primary, fallback. `FatalLLMError` propagates at once. Latency covers only the successful attempt.
+- Produces: `AllModelsFailed(attempts)`, `LLMCall(response, requested_model, served_model, attempts, fallback_used, latency_ms)`, `FallbackLLM(llm, *, primary_model, fallback_model, retry_delay_s=1.0, sleep=time.sleep, timer=time.perf_counter)` with `create(*, system, messages, tools, max_tokens) -> LLMCall`. Attempt order: primary, primary, fallback. Before the second primary attempt it sleeps `retry_delay_s` times a random factor between 0.5 and 1.5 (no sleep when `retry_delay_s` is 0, and none before the fallback attempt), so a burst of 529s is not hammered. `FatalLLMError` propagates at once. Latency covers only the successful attempt.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2105,8 +2112,9 @@ from tests.fakes import FakeLLM, make_response, text_block
 ARGS = dict(system="S", messages=[{"role": "user", "content": "hi"}], tools=None, max_tokens=50)
 
 
-def make(fake, timer=None):
-    kwargs = {"primary_model": "claude-sonnet-5", "fallback_model": "claude-haiku-4-5"}
+def make(fake, timer=None, sleeps=None):
+    kwargs = {"primary_model": "claude-sonnet-5", "fallback_model": "claude-haiku-4-5", "retry_delay_s": 1.0}
+    kwargs["sleep"] = (sleeps if sleeps is not None else []).append
     if timer is not None:
         kwargs["timer"] = timer
     return FallbackLLM(fake, **kwargs)
@@ -2121,11 +2129,29 @@ def test_first_attempt_succeeds():
     assert call.attempts == [{"model": "claude-sonnet-5", "error": None}]
 
 
-def test_retry_once_on_primary():
+def test_retry_once_on_primary_after_a_jittered_wait():
+    sleeps = []
     fake = FakeLLM([RetryableLLMError("timeout"), make_response(text_block("ok"))])
-    call = make(fake).create(**ARGS)
+    call = make(fake, sleeps=sleeps).create(**ARGS)
     assert fake.models_called == ["claude-sonnet-5", "claude-sonnet-5"]
     assert call.fallback_used is False
+    assert len(sleeps) == 1 and 0.5 <= sleeps[0] <= 1.5
+
+
+def test_no_wait_before_haiku():
+    sleeps = []
+    fake = FakeLLM([RetryableLLMError("a"), RetryableLLMError("b"), make_response(text_block("ok"))])
+    make(fake, sleeps=sleeps).create(**ARGS)
+    assert len(sleeps) == 1
+
+
+def test_zero_delay_never_sleeps():
+    sleeps = []
+    fake = FakeLLM([RetryableLLMError("a"), make_response(text_block("ok"))])
+    FallbackLLM(
+        fake, primary_model="claude-sonnet-5", fallback_model="claude-haiku-4-5", retry_delay_s=0, sleep=sleeps.append
+    ).create(**ARGS)
+    assert sleeps == []
 
 
 def test_two_primary_attempts_then_one_haiku():
@@ -2171,10 +2197,12 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'aiyaz.fallback'`.
 
 ```python
 """Retry once on the conversation model, then try the fallback model once.
-Only RetryableLLMError moves down the chain. FatalLLMError (a 4xx other than 429) stops at once."""
+Only RetryableLLMError moves down the chain. FatalLLMError (any 4xx) stops at once.
+The retry on the conversation model waits a short jittered delay; the Haiku attempt does not wait."""
 
 from __future__ import annotations
 
+import random
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -2206,11 +2234,15 @@ class FallbackLLM:
         *,
         primary_model: str,
         fallback_model: str,
+        retry_delay_s: float = 1.0,
+        sleep: Callable[[float], None] = time.sleep,
         timer: Callable[[], float] = time.perf_counter,
     ):
         self._llm = llm
         self.primary_model = primary_model
         self.fallback_model = fallback_model
+        self._retry_delay_s = retry_delay_s
+        self._sleep = sleep
         self._timer = timer
 
     def create(
@@ -2222,7 +2254,9 @@ class FallbackLLM:
         max_tokens: int,
     ) -> LLMCall:
         attempts: list[dict[str, str | None]] = []
-        for model in (self.primary_model, self.primary_model, self.fallback_model):
+        for attempt, model in enumerate((self.primary_model, self.primary_model, self.fallback_model)):
+            if attempt == 1 and self._retry_delay_s > 0:
+                self._sleep(self._retry_delay_s * random.uniform(0.5, 1.5))
             request = build_request(model=model, system=system, messages=messages, tools=tools, max_tokens=max_tokens)
             started = self._timer()
             try:
@@ -2246,7 +2280,7 @@ class FallbackLLM:
 - [ ] **Step 4: Run the tests to see them pass**
 
 Run: `uv run pytest tests/test_fallback.py`
-Expected: `6 passed`.
+Expected: `8 passed`.
 
 - [ ] **Step 5: Commit**
 
@@ -2639,7 +2673,8 @@ class RecordingTracer:
 
 
 def make_conversation(script=(), env=None, clock=None):
-    settings = load_settings(env or {})
+    # No real sleeping between retries in tests.
+    settings = load_settings({"AIYAZ_RETRY_DELAY_S": "0", **(env or {})})
     llm = FakeLLM(script)
     tracer = RecordingTracer()
     clock = clock or FakeClock()
@@ -2655,9 +2690,11 @@ def make_conversation(script=(), env=None, clock=None):
 
 
 def assert_history_valid(messages):
-    """First message is from the user, no message is empty, and every tool_use
-    is answered by a tool_result in the next message."""
+    """First message is from the user, roles alternate, no message is empty, and every
+    tool_use is answered by a tool_result in the next message."""
     assert messages[0]["role"] == "user"
+    for i in range(1, len(messages)):
+        assert messages[i]["role"] != messages[i - 1]["role"], f"messages {i - 1} and {i} share a role"
     for i, message in enumerate(messages):
         assert message["content"], f"message {i} is empty"
         content = message["content"] if isinstance(message["content"], list) else []
@@ -2831,7 +2868,10 @@ class Conversation:
     ):
         self._s = settings
         self._fallback = FallbackLLM(
-            llm, primary_model=settings.conversation_model, fallback_model=settings.fallback_model
+            llm,
+            primary_model=settings.conversation_model,
+            fallback_model=settings.fallback_model,
+            retry_delay_s=settings.retry_delay_s,
         )
         self._tracer = tracer
         self._prompt = prompt
@@ -3335,7 +3375,7 @@ git commit -m "Add reply() with the notes tool loop, name scrub and per-call tra
 
 **Interfaces:**
 - Consumes: `LimitTracker` (`before_turn`, `after_turn`, `near_limit`), `AllModelsFailed`, `FatalLLMError`, `fixed_lines` (`EMPTY_INPUT`, `EMPTY_REPLY`, `ERROR_LINE`, `ENDED`, `WRAP_UP`, `CLOSING`, `WRAP_UP_NUDGE`).
-- Produces: final `reply()` behaviour. The user always gets a non-empty, copy-compliant string and never a traceback from a model failure. No model call happens after the conversation ends, for empty input, or when a limit is already hit. After a model failure, history is rolled back to the prospect's message, so no `tool_use` is left without its `tool_result`.
+- Produces: final `reply()` behaviour. The user always gets a non-empty, copy-compliant string and never a traceback from a model failure. No model call happens after the conversation ends, for empty input, or when a limit is already hit. After a model failure, history is rolled back to the prospect's message, so no `tool_use` is left without its `tool_result`. History never holds two user messages in a row: if it already ends with a user message (after a failure, an empty model turn, or the tool-round cap), the new prospect text is added to that message. The API reference is inconsistent on whether consecutive same-role messages are merged or rejected, so the engine does not rely on either.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3378,7 +3418,9 @@ def test_refusal_with_no_content_does_not_append_empty_assistant_message():
     assert convo.reply("first") == fixed_lines.EMPTY_REPLY
     assert "stop_refusal" in tracer.event_names()
     assert convo.reply("second") == "Sure. Who uses it?"
-    assert_history_valid(llm.calls[1]["messages"])
+    sent = llm.calls[1]["messages"]
+    assert_history_valid(sent)
+    assert sent[-1]["content"] == [{"type": "text", "text": "first"}, {"type": "text", "text": "second"}]
 
 
 def test_max_tokens_is_logged():
@@ -3523,7 +3565,13 @@ In `src/aiyaz/engine.py`, replace the whole `reply` method and the whole `_run_m
         content: list[dict[str, Any]] = [{"type": "text", "text": text}]
         if self._limits.near_limit(self.prospect_turns):
             content.append({"type": "text", "text": fixed_lines.WRAP_UP_NUDGE})
-        self._messages.append({"role": "user", "content": content})
+        last = self._messages[-1]
+        if last["role"] == "user" and isinstance(last["content"], list):
+            # After a failure, an empty model turn or a tool round cap, history already ends
+            # with a user message. Add to it so roles keep alternating.
+            last["content"].extend(content)
+        else:
+            self._messages.append({"role": "user", "content": content})
         checkpoint = len(self._messages)
 
         try:
@@ -4112,6 +4160,8 @@ Expected: `8 passed`.
 
 Run: `ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY AIYAZ_TRACE_DIR=/tmp/aiyaz-traces uv run aiyaz`
 Expected: the first line is `Aiyaz: I'm Aiyaz, an AI agent from getaiengineer.dev. What does your product do, and where does AI show up in it?`. Answer two questions, type `/quit`, and check that `/tmp/aiyaz-traces/<conversation id>.jsonl` has one `call` line per model call with `prompt_version`, `served_model`, `latency_ms` and `cost_usd`.
+
+Then repeat once with the fallback model as the conversation model, so the exact Haiku request shape (no `thinking` key, top-level `cache_control`, tools) gets one real call before merge: `AIYAZ_CONVERSATION_MODEL=claude-haiku-4-5 AIYAZ_TRACE_DIR=/tmp/aiyaz-traces uv run aiyaz`. Expected: a normal reply, not the error line. If Haiku rejects the request, the trace's `model_failure` event holds the 400 message; fix `build_request` for Haiku and add a test for the corrected shape. (The prompt-caching reference describes automatic caching as gated by platform, not by model; Haiku 4.5's minimum cacheable prefix is 4,096 tokens, so fallback calls may simply show no cache reads.)
 
 - [ ] **Step 7: Commit**
 
@@ -5602,7 +5652,7 @@ def run(tmp_path, fake, env=None, extra=()):
     personas, selfcheck = write_inputs(tmp_path)
     out = tmp_path / "out"
     argv = ["run", "--personas", str(personas), "--selfcheck", str(selfcheck), "--out", str(out), *extra]
-    code = main(argv, llm_factory=lambda retries: fake, env=env or {})
+    code = main(argv, llm_factory=lambda retries: fake, env={"AIYAZ_RETRY_DELAY_S": "0", **(env or {})})
     return code, out
 
 
@@ -6570,15 +6620,19 @@ Not code; the order of operations once CI has produced `eval-results/`:
 | Models in config; Sonnet 5 pending confirmation; Haiku 4.5 fallback | 1, 8, 9 |
 | Structured notes via a tool; brief facts confirmed only when the prospect confirms | 5, 6, 13, 20 |
 | end_conversation tool | 6, 13 |
-| Discovery flow, guesses labelled, off-topic steered once, cannot-answer offers a call, email only at the end | 3 (prompt), 19, 20 |
+| Discovery flow (about five questions) | 3 (prompt only; no check) |
+| Guesses labelled as guesses | 3 (prompt), 20 (judge check) |
+| Off-topic steered back once, then wrap up | 3 (prompt), 19 (`expected_end_reason` for the off-topic personas) |
+| Cannot answer: says so and offers a call with the team | 3 (prompt only; personas `enterprise-procurement` and `deep-technical-question` exercise it, but no check scores it) |
+| Email asked for only at the end | 3 (prompt), 19 (`email_only_at_end`) |
 | Versioned prompt files; every trace records the prompt version | 3, 11, 13, 15 |
 | 10-minute cap, turn cap, per-conversation cost cap | 10, 14, 19 |
-| Retry once then Haiku 4.5; never on 4xx other than 429 | 8, 9, 14 |
+| Retry once then Haiku 4.5 on timeout, 5xx, overload, connection error; never on a 4xx | 8, 9, 14 |
 | Tracing: model, prompt version, latency, tokens, cost, tool calls; Langfuse | 11, 13, 15 |
 | Terminal CLI | 16 |
 | ~25 synthetic personas played by a model | 17, 18 |
 | Code checks: AI disclosure, no "Imran", only $3,000, within limits | 19 |
-| Model-graded checks: no unconfirmed fact asserted, guesses labelled | 20 |
+| Model-graded checks: no unconfirmed fact asserted, guesses labelled (summary traceability is deferred with the summary plan) | 20 |
 | Runner, results JSON, pass rate, threshold from config (initially 0) | 1, 21, 22 |
 | GitHub Actions on PRs with ANTHROPIC_API_KEY, plus a key-free unit job | 23 |
 | Grading round: CSV for hand grading, agreement rate and confusion counts | 24, 25 |
