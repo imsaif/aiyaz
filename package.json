@@ -1,0 +1,22 @@
+{
+  "name": "aiyaz",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "talk": "tsx --env-file-if-exists=.env src/cli.ts",
+    "test": "vitest run",
+    "evals": "evalite run",
+    "evals:watch": "evalite watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "evalite": "^0.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
