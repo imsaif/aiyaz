@@ -151,7 +151,9 @@ Accounts Imran provides: Anthropic, Neon, Langfuse, Resend, Fly. Voice accounts
 2. Evals, CI gate, and the grading round.
 3. Research pipeline and prospect links.
 4. Summary page and email.
-5. Text chat on getaiengineer.dev.
+5. Agent chip on getaiengineer.dev: a small "Talk to Aiyaz" chip directly under the hero's
+   Book-a-call button opens the conversation (text first, voice once phase 2 lands). It is the
+   only entry point on the homepage. It ships only when Aiyaz can answer; no dead chip.
 6. Voice.
 7. "How it's built" page.
 
@@ -163,6 +165,9 @@ Accounts Imran provides: Anthropic, Neon, Langfuse, Resend, Fly. Voice accounts
 - Payments or booking inside the agent; it links to the booking page.
 
 ## Open items
+
+- Conversation model: this design says Claude Sonnet 5 for speed and cost in live voice.
+  Claude Opus 5 is the more capable default. Imran to confirm; the model is one config value.
 
 - Eval pass threshold: set after the first full run shows the baseline.
 - Booking link and email address: still placeholders on the website.
