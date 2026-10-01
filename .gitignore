@@ -9,3 +9,6 @@ node_modules/
 .evalite/
 evalite.db*
 !.env.example
+evals/arabic/.venv/
+arabic-review.jsonl
+arabic-review.md

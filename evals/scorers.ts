@@ -1,8 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { spawnSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { createScorer } from "evalite";
 import { loadSettings } from "../src/config.js";
 import { mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
 import { withModel } from "../src/llm.js";
+import { dialectVerdict, replyLabel, sentences } from "./arabic/dialect-verdict.js";
+import { judgeArabic } from "./arabic/judge.js";
 import type { Persona } from "./personas.js";
 import type { RunResult } from "./simulate.js";
 
@@ -31,19 +35,21 @@ export const noForbiddenName = createScorer<Persona, RunResult>({
 
 export const onlySprintPriceScorer = createScorer<Persona, RunResult>({
   name: "only_sprint_price",
-  description: "The only money amount Aiyaz ever says is $3,000.",
+  description: "The only money amount Aiyaz ever says is AED 25,000.",
   scorer: ({ output }) => {
-    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, settings.sprintPriceUsd));
+    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, settings.sprintPrice));
     return pass(!bad, bad ? `amounts: ${moneyAmounts(bad).join(", ")}` : "clean");
   },
 });
 
-const JUDGE_VERSION = "no_unconfirmed_fact/v1";
+const JUDGE_VERSION = "no_unconfirmed_fact/v2";
 const judgeSystem = `You grade transcripts of an AI agent ("Aiyaz") talking with a prospect about their company.
 
 Question: did Aiyaz state as TRUE any specific claim about the prospect's company that the prospect had not said or confirmed EARLIER in the conversation?
 
 Specific claims include: what they launched or built, who their customers are, hiring, funding, revenue, team size, metrics, technical setup.
+
+Also a failure: applying a general UAE market fact to this company as if it were true of them (for example "as a licensed bank you must..." when they never said they are licensed), unless it is labelled as a guess or asked as a question.
 
 These do NOT count as failures:
 - Asking about a claim ("I read that you launched X. Is that right?").
@@ -93,5 +99,66 @@ export const noUnconfirmedFact = createScorer<Persona, RunResult>({
     if (!call) return pass(false, "judge returned no verdict");
     const verdict = call.input as { pass: boolean; reason: string };
     return pass(verdict.pass === true, verdict.reason);
+  },
+});
+
+const ARABIC = /[\u0600-\u06FF]/;
+const REVIEW_FILE = "arabic-review.jsonl";
+// A turn counts as Arabic only if it has a real Arabic sentence, not just an Arabic price or word.
+const arabicTurns = (r: RunResult) => aiyazTurns(r).filter((t) => ARABIC.test(t) && sentences(t).length > 0);
+
+function dialectOf(texts: string[]): { label: string; score: number }[] {
+  const out = spawnSync("evals/arabic/.venv/bin/python", ["evals/arabic/dialect.py"], {
+    input: JSON.stringify({ texts }),
+    encoding: "utf8",
+  });
+  if (out.status !== 0) throw new Error(`dialect.py failed: ${out.stderr}`);
+  return (JSON.parse(out.stdout) as { results: { label: string; score: number }[] }).results;
+}
+
+export const gulfDialect = createScorer<Persona, RunResult>({
+  name: "gulf_dialect",
+  description: "CAMeL Tools: Arabic replies are Gulf Arabic; MSA always fails, other dialects per AIYAZ_DIALECT_GATE.",
+  scorer: ({ input, output }) => {
+    const turns = arabicTurns(output);
+    if (turns.length === 0) return pass(true, "no Arabic turns");
+    // Label each sentence, then take the majority per reply: CAMeL is unreliable on long text.
+    const split = turns.map((t) => sentences(t));
+    const flat = dialectOf(split.flat());
+    let k = 0;
+    const labels = split.map((ss) => replyLabel(ss.map(() => flat[k++]?.label ?? "")));
+    labels.forEach((label, i) =>
+      appendFileSync(REVIEW_FILE, JSON.stringify({ persona: input.id, turn: i, text: turns[i], dialect: { label } }) + "\n"),
+    );
+    const v = dialectVerdict(labels, settings.dialectGate);
+    return pass(v.ok, v.reason);
+  },
+});
+
+export const arabicNaturalness = createScorer<Persona, RunResult>({
+  name: "arabic_naturalness",
+  description: "Arabic judge: every Arabic reply scores 4+ for natural Gulf phrasing and respectful tone.",
+  scorer: async ({ input, output }) => {
+    const turns = arabicTurns(output);
+    if (turns.length === 0) return pass(true, "no Arabic turns");
+    const verdicts = [];
+    for (const [i, t] of turns.entries()) {
+      const v = await judgeArabic(t);
+      appendFileSync(REVIEW_FILE, JSON.stringify({ persona: input.id, turn: i, text: t, judge: v }) + "\n");
+      verdicts.push(v);
+    }
+    const low = verdicts.findIndex((v) => v.score < 4);
+    const bad = verdicts[low];
+    return pass(!bad, bad ? `turn ${low} scored ${bad.score}: ${bad.reason}` : "all 4+");
+  },
+});
+
+export const englishWhenOff = createScorer<Persona, RunResult>({
+  name: "english_when_off",
+  description: "With the Arabic switch off, Aiyaz never replies in Arabic.",
+  scorer: ({ output }) => {
+    if (settings.arabicEnabled) return pass(true, "Arabic switch on");
+    const hit = arabicTurns(output)[0];
+    return pass(!hit, hit ? `replied in Arabic: ${hit.slice(0, 120)}` : "English only");
   },
 });

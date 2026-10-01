@@ -145,7 +145,14 @@ export class Conversation {
       this.messages.push({ role: "assistant", content: message.content });
       for (const block of message.content) {
         if (block.type === "text" && block.text.trim()) {
-          spoken.push(scrubForbiddenNames(block.text.trim(), this.settings.forbiddenNames));
+          // The model sometimes echoes a tool acknowledgement ("Saved.") before speaking.
+          const clean = block.text
+            .trim()
+            .replace(/^(?:saved|noted|ended)(?:[.!]\s*|\s*$)/i, "")
+            // Stage directions are never spoken: "(Waiting for their answer.)"
+            .replace(/\s*\((?:waiting|pause|pauses|wait)[^)]*\)\s*/gi, " ")
+            .trim();
+          if (clean) spoken.push(scrubForbiddenNames(clean, this.settings.forbiddenNames));
         }
       }
 
@@ -155,7 +162,7 @@ export class Conversation {
       const results: Anthropic.ToolResultBlockParam[] = toolUses.map((tool) => {
         if (tool.name === "record_notes") {
           this.notes = applyNotesUpdate(this.notes, tool.input as NotesUpdate);
-          return { type: "tool_result", tool_use_id: tool.id, content: "saved" };
+          return { type: "tool_result", tool_use_id: tool.id, content: "Notes saved. Do not mention this to the prospect." };
         }
         if (tool.name === "end_conversation") {
           endRequested = true;

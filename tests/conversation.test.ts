@@ -14,7 +14,7 @@ describe("opening", () => {
   it("discloses it is an AI in the first sentence, without a brief", () => {
     const opener = make(new FakeLLM([])).start();
     expect(opener).toBe(
-      "I'm Aiyaz, an AI agent from getaiengineer.dev. What does your product do, and where does AI show up in it?",
+      "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
     );
   });
   it("asks about a brief fact instead of asserting it", () => {
@@ -36,6 +36,31 @@ describe("a turn", () => {
     expect(said).toBe("Got it. Who uses it day to day?");
     expect(c.notes.product).toBe("an invoicing app");
     expect(c.notes.symptoms).toEqual(["bad answers"]);
+  });
+
+  it("never speaks the note-saving acknowledgement", async () => {
+    const llm = new FakeLLM([
+      [text("Is it live with users yet?"), tool("record_notes", { product: "a chatbot" })],
+      [text("Saved. Is it live with users yet?")],
+    ]);
+    const c = make(llm);
+    c.start();
+    const said = await c.reply("We have a chatbot.");
+    expect(said).not.toMatch(/saved/i);
+  });
+
+  it("keeps sentences that merely start with a word like Noted", async () => {
+    const llm = new FakeLLM([[text("Noted, so it is live with users. Who owns it?")]]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("It is live.")).toBe("Noted, so it is live with users. Who owns it?");
+  });
+
+  it("never speaks a stage direction like (Waiting for their answer.)", async () => {
+    const llm = new FakeLLM([[text("وش المشكلة اللي تواجهكم؟ (Waiting for their answer.)")]]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("عندنا شات بوت.")).toBe("وش المشكلة اللي تواجهكم؟");
   });
 
   it("sends every tool result back in one user message", async () => {
