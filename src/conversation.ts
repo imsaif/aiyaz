@@ -146,7 +146,7 @@ export class Conversation {
       for (const block of message.content) {
         if (block.type === "text" && block.text.trim()) {
           // The model sometimes echoes a tool acknowledgement ("Saved.") before speaking.
-          const clean = block.text.trim().replace(/^(?:saved|noted|ended)[.!]?\s*/i, "");
+          const clean = block.text.trim().replace(/^(?:saved|noted|ended)(?:[.!]\s*|\s*$)/i, "");
           if (clean) spoken.push(scrubForbiddenNames(clean, this.settings.forbiddenNames));
         }
       }
