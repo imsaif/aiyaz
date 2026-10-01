@@ -146,7 +146,12 @@ export class Conversation {
       for (const block of message.content) {
         if (block.type === "text" && block.text.trim()) {
           // The model sometimes echoes a tool acknowledgement ("Saved.") before speaking.
-          const clean = block.text.trim().replace(/^(?:saved|noted|ended)(?:[.!]\s*|\s*$)/i, "");
+          const clean = block.text
+            .trim()
+            .replace(/^(?:saved|noted|ended)(?:[.!]\s*|\s*$)/i, "")
+            // Stage directions are never spoken: "(Waiting for their answer.)"
+            .replace(/\s*\((?:waiting|pause|pauses|wait)[^)]*\)\s*/gi, " ")
+            .trim();
           if (clean) spoken.push(scrubForbiddenNames(clean, this.settings.forbiddenNames));
         }
       }

@@ -11,7 +11,13 @@ const RUBRIC = (text: string) =>
 
 export function parseVerdict(raw: string): JudgeVerdict {
   const json = raw.match(/\{[\s\S]*\}/)?.[0];
-  if (!json) throw new Error(`Arabic judge returned no JSON: ${raw.slice(0, 200)}`);
+  if (!json) {
+    // Arabic is token-heavy, so the answer can stop before the closing brace; the score comes first.
+    const score = raw.match(/"score"\s*:\s*(\d)/)?.[1];
+    const reason = raw.match(/"reason"\s*:\s*"([^"]*)/)?.[1] ?? "";
+    if (score) return { score: Number(score), reason };
+    throw new Error(`Arabic judge returned no JSON: ${raw.slice(0, 200)}`);
+  }
   const v = JSON.parse(json) as JudgeVerdict;
   if (typeof v.score !== "number") throw new Error(`Arabic judge returned no score: ${json}`);
   return v;
@@ -21,7 +27,7 @@ async function viaHuggingFace(model: string, prompt: string, timeoutMs: number):
   const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.HF_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 400 }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: 800 }),
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`Arabic judge HTTP ${res.status}: ${await res.text()}`);
@@ -31,7 +37,7 @@ async function viaHuggingFace(model: string, prompt: string, timeoutMs: number):
 
 async function viaAnthropic(model: string, prompt: string, timeoutMs: number): Promise<string> {
   const client = new Anthropic({ timeout: timeoutMs, maxRetries: 2 });
-  const res = await client.messages.create({ model, max_tokens: 400, messages: [{ role: "user", content: prompt }] });
+  const res = await client.messages.create({ model, max_tokens: 800, messages: [{ role: "user", content: prompt }] });
   return res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 }
 

@@ -28,6 +28,9 @@ describe("judge verdict parsing", () => {
   it("reads JSON wrapped in other text", () => {
     expect(parseVerdict('Here: {"score": 4, "reason": "طبيعي"} done')).toEqual({ score: 4, reason: "طبيعي" });
   });
+  it("reads the score from an answer cut off before the closing brace", () => {
+    expect(parseVerdict('{"score": 4, "reason": "الرد يستخدم لهجة خليجية')).toEqual({ score: 4, reason: "الرد يستخدم لهجة خليجية" });
+  });
   it("throws when there is no JSON or no score", () => {
     expect(() => parseVerdict("no json")).toThrow();
     expect(() => parseVerdict('{"reason": "x"}')).toThrow();

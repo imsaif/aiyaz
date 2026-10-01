@@ -42,6 +42,7 @@ describe("v2 prompt", () => {
     expect(p.text).toContain("AI initiative");
     expect(p.text).toContain("AED 25,000");
     expect(p.text).not.toContain("$");
+    expect(p.text).toContain("Everything you write is spoken");
   });
   it("opens by asking what the company wants to do with AI", () => {
     expect(openingLine(v2, null)).toBe(

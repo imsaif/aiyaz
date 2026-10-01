@@ -56,6 +56,13 @@ describe("a turn", () => {
     expect(await c.reply("It is live.")).toBe("Noted, so it is live with users. Who owns it?");
   });
 
+  it("never speaks a stage direction like (Waiting for their answer.)", async () => {
+    const llm = new FakeLLM([[text("وش المشكلة اللي تواجهكم؟ (Waiting for their answer.)")]]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("عندنا شات بوت.")).toBe("وش المشكلة اللي تواجهكم؟");
+  });
+
   it("sends every tool result back in one user message", async () => {
     const llm = new FakeLLM([
       [tool("record_notes", { product: "a" }), tool("record_notes", { users: "b" })],
