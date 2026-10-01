@@ -25,6 +25,9 @@ describe("only the sprint price", () => {
       "AED 25000",
       "السعر ٢٥٬٠٠٠ درهم",
       "السعر 25 ألف درهم",
+      "السعر 25 الف درهم",
+      "درهم ٢٥٬٠٠٠",
+      "Dhs 25,000",
       "no price here",
     ]) {
       expect(onlySprintPrice(t, price), t).toBe(true);
@@ -41,6 +44,15 @@ describe("only the sprint price", () => {
       "٨٬٠٠٠ درهم",
       "25 ألف دولار",
       "₹2,50,000",
+      "AED 25,000, about 6,800 US dollars",
+      "10 آلاف درهم",
+      "8 الف درهم",
+      "درهم ٨٬٠٠٠",
+      "8,000 دراهم",
+      "Dh 8,000",
+      "Dhs 8,000",
+      "ثمانية آلاف درهم",
+      "roughly seven thousand dollars",
     ]) {
       expect(onlySprintPrice(t, price), t).toBe(false);
     }
