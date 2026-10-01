@@ -9,7 +9,7 @@ if (!existsSync("arabic-review.jsonl")) {
 const rows = readFileSync("arabic-review.jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l) as Row);
 const merged = new Map<string, Row>();
 for (const r of rows) {
-  const key = `${r.persona}#${r.turn}`;
+  const key = `${r.persona}#${r.text}`;
   merged.set(key, { ...merged.get(key), ...r });
 }
 const lines = [
