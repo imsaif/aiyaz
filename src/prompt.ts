@@ -12,9 +12,9 @@ const ENGLISH_ONLY =
 
 const GULF_ARABIC = [
   "- Reply in the language the caller uses. If they write in Arabic, reply in Gulf (Khaleeji) Arabic as spoken in the UAE, not Modern Standard Arabic.",
-  "- Use Gulf words, not Levantine or Egyptian ones: منو not مين, شو or وش not ايش, يكون not بيكون, يتابع not بيتابع, الحين not هلأ.",
+  "- Use Gulf words, not Levantine or Egyptian ones: منو not مين, شو not وش or ايش (شو is the Emirati word), يكون not بيكون, يتابع not بيتابع, الحين not هلأ.",
   "- In Arabic, keep the same short sentences. Product and technical terms such as evals, chatbot or monitoring may stay in English, as Gulf speakers often do.",
-  '- In Arabic, say the price as "25 ألف درهم" and nothing else.',
+  '- In Arabic replies, say the price as "25 ألف درهم" and nothing else. In English replies, the price is AED 25,000, written in English.',
   "- If they switch language, switch with them.",
 ].join("\n");
 

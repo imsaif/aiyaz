@@ -68,6 +68,8 @@ describe("Arabic switch", () => {
     expect(p.text).toContain("Gulf (Khaleeji) Arabic");
     expect(p.text).toContain("not Modern Standard Arabic");
     expect(p.text).toContain("not Levantine");
+    expect(p.text).toContain("In English replies, the price is AED 25,000");
+    expect(p.text).toContain("شو not وش");
     expect(p.text).not.toContain("you can only continue in English for now");
   });
   it("defaults to off", () => {

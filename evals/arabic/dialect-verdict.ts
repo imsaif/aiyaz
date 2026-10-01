@@ -1,11 +1,9 @@
 // CAMeL Tools city labels counted as Gulf. MADAR has no Dubai or Abu Dhabi label.
 export const GULF_LABELS = new Set(["DOH", "RIY", "MUS"]);
 
-// MSA always fails: drifting into formal Arabic is the main risk, and CAMeL
-// detects MSA reliably. Other non-Gulf labels fail only when the gate is "fail".
+// Any non-Gulf label, MSA included, fails only when the gate is "fail". CAMeL labelled
+// clearly Gulf replies as MSA in live runs, so the judge and a human review decide.
 export function dialectVerdict(labels: string[], gate: "fail" | "report"): { ok: boolean; reason: string } {
-  const msa = labels.indexOf("MSA");
-  if (msa !== -1) return { ok: false, reason: `turn ${msa} labelled MSA` };
   const other = labels.findIndex((l) => !GULF_LABELS.has(l));
   if (other === -1) return { ok: true, reason: "all Gulf" };
   const ok = gate === "report";
