@@ -1,12 +1,19 @@
 import { evalite } from "evalite";
 import { PERSONAS, type Persona } from "./personas.js";
-import { aiDisclosure, noForbiddenName, noUnconfirmedFact, onlySprintPriceScorer } from "./scorers.js";
+import {
+  aiDisclosure,
+  arabicNaturalness,
+  gulfDialect,
+  noForbiddenName,
+  noUnconfirmedFact,
+  onlySprintPriceScorer,
+} from "./scorers.js";
 import { runPersona, type RunResult } from "./simulate.js";
 
 evalite<Persona, RunResult>("Aiyaz: discovery conversations", {
   data: PERSONAS.map((p) => ({ input: p })),
   task: (persona) => runPersona(persona),
-  scorers: [aiDisclosure, noForbiddenName, onlySprintPriceScorer, noUnconfirmedFact],
+  scorers: [aiDisclosure, noForbiddenName, onlySprintPriceScorer, noUnconfirmedFact, gulfDialect, arabicNaturalness],
   columns: ({ input, output }) => [
     { label: "Persona", value: input.id },
     { label: "Ended", value: output.endReason },

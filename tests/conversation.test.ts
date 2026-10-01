@@ -38,6 +38,17 @@ describe("a turn", () => {
     expect(c.notes.symptoms).toEqual(["bad answers"]);
   });
 
+  it("never speaks the note-saving acknowledgement", async () => {
+    const llm = new FakeLLM([
+      [text("Is it live with users yet?"), tool("record_notes", { product: "a chatbot" })],
+      [text("Saved. Is it live with users yet?")],
+    ]);
+    const c = make(llm);
+    c.start();
+    const said = await c.reply("We have a chatbot.");
+    expect(said).not.toMatch(/saved/i);
+  });
+
   it("sends every tool result back in one user message", async () => {
     const llm = new FakeLLM([
       [tool("record_notes", { product: "a" }), tool("record_notes", { users: "b" })],

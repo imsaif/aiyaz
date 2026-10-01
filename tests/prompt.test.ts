@@ -63,6 +63,7 @@ describe("Arabic switch", () => {
     const p = buildSystemPrompt({ ...v2, arabicEnabled: true }, null);
     expect(p.text).toContain("Gulf (Khaleeji) Arabic");
     expect(p.text).toContain("not Modern Standard Arabic");
+    expect(p.text).toContain("not Levantine");
     expect(p.text).not.toContain("you can only continue in English for now");
   });
   it("defaults to off", () => {

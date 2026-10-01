@@ -1,8 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { spawnSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { createScorer } from "evalite";
 import { loadSettings } from "../src/config.js";
 import { mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
 import { withModel } from "../src/llm.js";
+import { dialectVerdict, replyLabel, sentences } from "./arabic/dialect-verdict.js";
+import { judgeArabic } from "./arabic/judge.js";
 import type { Persona } from "./personas.js";
 import type { RunResult } from "./simulate.js";
 
@@ -95,5 +99,55 @@ export const noUnconfirmedFact = createScorer<Persona, RunResult>({
     if (!call) return pass(false, "judge returned no verdict");
     const verdict = call.input as { pass: boolean; reason: string };
     return pass(verdict.pass === true, verdict.reason);
+  },
+});
+
+const ARABIC = /[\u0600-\u06FF]/;
+const REVIEW_FILE = "arabic-review.jsonl";
+const arabicTurns = (r: RunResult) => aiyazTurns(r).filter((t) => ARABIC.test(t));
+
+function dialectOf(texts: string[]): { label: string; score: number }[] {
+  const out = spawnSync("evals/arabic/.venv/bin/python", ["evals/arabic/dialect.py"], {
+    input: JSON.stringify({ texts }),
+    encoding: "utf8",
+  });
+  if (out.status !== 0) throw new Error(`dialect.py failed: ${out.stderr}`);
+  return (JSON.parse(out.stdout) as { results: { label: string; score: number }[] }).results;
+}
+
+export const gulfDialect = createScorer<Persona, RunResult>({
+  name: "gulf_dialect",
+  description: "CAMeL Tools: Arabic replies are Gulf Arabic; MSA always fails, other dialects per AIYAZ_DIALECT_GATE.",
+  scorer: ({ input, output }) => {
+    const turns = arabicTurns(output);
+    if (turns.length === 0) return pass(true, "no Arabic turns");
+    // Label each sentence, then take the majority per reply: CAMeL is unreliable on long text.
+    const split = turns.map((t) => sentences(t));
+    const flat = dialectOf(split.flat());
+    let k = 0;
+    const labels = split.map((ss) => replyLabel(ss.map(() => flat[k++]?.label ?? "")));
+    labels.forEach((label, i) =>
+      appendFileSync(REVIEW_FILE, JSON.stringify({ persona: input.id, turn: i, text: turns[i], dialect: { label } }) + "\n"),
+    );
+    const v = dialectVerdict(labels, settings.dialectGate);
+    return pass(v.ok, v.reason);
+  },
+});
+
+export const arabicNaturalness = createScorer<Persona, RunResult>({
+  name: "arabic_naturalness",
+  description: "Arabic judge: every Arabic reply scores 4+ for natural Gulf phrasing and respectful tone.",
+  scorer: async ({ input, output }) => {
+    const turns = arabicTurns(output);
+    if (turns.length === 0) return pass(true, "no Arabic turns");
+    const verdicts = [];
+    for (const [i, t] of turns.entries()) {
+      const v = await judgeArabic(t);
+      appendFileSync(REVIEW_FILE, JSON.stringify({ persona: input.id, turn: i, text: t, judge: v }) + "\n");
+      verdicts.push(v);
+    }
+    const low = verdicts.findIndex((v) => v.score < 4);
+    const bad = verdicts[low];
+    return pass(!bad, bad ? `turn ${low} scored ${bad.score}: ${bad.reason}` : "all 4+");
   },
 });

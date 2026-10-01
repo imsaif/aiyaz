@@ -8,6 +8,9 @@ export type Settings = {
   promptVersion: string;
   knowledgePack: string | null;
   arabicEnabled: boolean;
+  arabicJudgeProvider: "anthropic" | "hf";
+  arabicJudgeModel: string;
+  dialectGate: "fail" | "report";
   conversationModel: string;
   fallbackModel: string;
   judgeModel: string;
@@ -42,6 +45,16 @@ export function loadSettings(): Settings {
     knowledgePack: env("AIYAZ_KNOWLEDGE", "uae.v1") === "none" ? null : env("AIYAZ_KNOWLEDGE", "uae.v1"),
     // Off until the Gulf Arabic review passes (spec section 4).
     arabicEnabled: env("AIYAZ_ARABIC", "false") === "true",
+    // Spike 2026-10-01: no HF token yet, so the judge runs on Claude (not open source).
+    // Set AIYAZ_ARABIC_JUDGE=hf with HF_TOKEN to use ALLaM instead.
+    arabicJudgeProvider: env("AIYAZ_ARABIC_JUDGE", "anthropic") === "hf" ? "hf" : "anthropic",
+    arabicJudgeModel: env(
+      "AIYAZ_ARABIC_JUDGE_MODEL",
+      env("AIYAZ_ARABIC_JUDGE", "anthropic") === "hf" ? "humain-ai/ALLaM-7B-Instruct-preview" : "claude-sonnet-5",
+    ),
+    // Spike: CAMeL hit 55% on Gulf lines, so a non-Gulf label is reported, not failed.
+    // A reply labelled MSA always fails.
+    dialectGate: env("AIYAZ_DIALECT_GATE", "report") === "fail" ? "fail" : "report",
     // Confirmed by Imran 2026-09-28.
     conversationModel: env("AIYAZ_CONVERSATION_MODEL", "claude-sonnet-5"),
     fallbackModel: env("AIYAZ_FALLBACK_MODEL", "claude-haiku-4-5"),
