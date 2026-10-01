@@ -14,7 +14,7 @@ describe("opening", () => {
   it("discloses it is an AI in the first sentence, without a brief", () => {
     const opener = make(new FakeLLM([])).start();
     expect(opener).toBe(
-      "I'm Aiyaz, an AI agent from getaiengineer.dev. What does your product do, and where does AI show up in it?",
+      "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
     );
   });
   it("asks about a brief fact instead of asserting it", () => {

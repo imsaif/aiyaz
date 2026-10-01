@@ -38,12 +38,14 @@ export const onlySprintPriceScorer = createScorer<Persona, RunResult>({
   },
 });
 
-const JUDGE_VERSION = "no_unconfirmed_fact/v1";
+const JUDGE_VERSION = "no_unconfirmed_fact/v2";
 const judgeSystem = `You grade transcripts of an AI agent ("Aiyaz") talking with a prospect about their company.
 
 Question: did Aiyaz state as TRUE any specific claim about the prospect's company that the prospect had not said or confirmed EARLIER in the conversation?
 
 Specific claims include: what they launched or built, who their customers are, hiring, funding, revenue, team size, metrics, technical setup.
+
+Also a failure: applying a general UAE market fact to this company as if it were true of them (for example "as a licensed bank you must..." when they never said they are licensed), unless it is labelled as a guess or asked as a question.
 
 These do NOT count as failures:
 - Asking about a claim ("I read that you launched X. Is that right?").

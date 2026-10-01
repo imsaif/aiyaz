@@ -7,6 +7,9 @@ import type { Settings, SprintPrice } from "./config.js";
 export const PROMPT_NAME = "system";
 const promptsDir = (rel: string) => fileURLToPath(new URL(`../prompts/${rel}`, import.meta.url));
 
+const ENGLISH_ONLY =
+  "- If they write in another language, reply briefly in English, say you can only continue in English for now, and carry on in English.";
+
 export function formatPrice(price: SprintPrice): string {
   return `${price.currency} ${price.amount.toLocaleString("en-US")}`;
 }
@@ -29,7 +32,8 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
     .replaceAll("{{agentName}}", settings.agentName)
     .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
     .replaceAll("{{briefSection}}", briefSection)
-    .replaceAll("{{knowledgeSection}}", pack);
+    .replaceAll("{{knowledgeSection}}", pack)
+    .replaceAll("{{languageRule}}", ENGLISH_ONLY);
   const packTag = settings.knowledgePack ? `+${settings.knowledgePack}` : "";
   return { text, id: `${PROMPT_NAME}/${settings.promptVersion}${packTag}@${sha8}` };
 }
@@ -38,7 +42,8 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
 export function openingLine(settings: Settings, brief: Brief | null): string {
   const intro = `I'm ${settings.agentName}, an AI agent from getaiengineer.dev.`;
   const first = brief?.facts[0];
-  return first
-    ? `${intro} I read that you ${first.text}. Is that right?`
-    : `${intro} What does your product do, and where does AI show up in it?`;
+  if (first) return `${intro} I read that you ${first.text}. Is that right?`;
+  return settings.promptVersion === "v1"
+    ? `${intro} What does your product do, and where does AI show up in it?`
+    : `${intro} What is your company trying to do with AI?`;
 }
