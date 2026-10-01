@@ -9,3 +9,4 @@ node_modules/
 .evalite/
 evalite.db*
 !.env.example
+evals/arabic/.venv/
