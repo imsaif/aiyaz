@@ -1,8 +1,10 @@
 // Every setting lives here. Anything that might change later is an env var.
 
+export type SprintPrice = { amount: number; currency: "AED" };
+
 export type Settings = {
   agentName: string;
-  sprintPriceUsd: number;
+  sprintPrice: SprintPrice;
   conversationModel: string;
   fallbackModel: string;
   judgeModel: string;
@@ -30,7 +32,8 @@ const num = (key: string, fallback: number) => {
 export function loadSettings(): Settings {
   return {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
-    sprintPriceUsd: 3000,
+    // Decided 2026-10-01: the sprint is priced in AED for UAE companies.
+    sprintPrice: { amount: 25000, currency: "AED" },
     // Confirmed by Imran 2026-09-28.
     conversationModel: env("AIYAZ_CONVERSATION_MODEL", "claude-sonnet-5"),
     fallbackModel: env("AIYAZ_FALLBACK_MODEL", "claude-haiku-4-5"),

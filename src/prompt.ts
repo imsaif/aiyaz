@@ -2,11 +2,15 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Brief } from "./notes.js";
-import type { Settings } from "./config.js";
+import type { Settings, SprintPrice } from "./config.js";
 
 export const PROMPT_NAME = "system";
 export const PROMPT_VERSION = "v1";
 const PROMPT_PATH = fileURLToPath(new URL(`../prompts/${PROMPT_NAME}.${PROMPT_VERSION}.md`, import.meta.url));
+
+export function formatPrice(price: SprintPrice): string {
+  return `${price.currency} ${price.amount.toLocaleString("en-US")}`;
+}
 
 export type BuiltPrompt = { text: string; id: string };
 
@@ -23,7 +27,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
     : "You have no research brief. Everything you know about their company comes from this conversation.";
   const text = template
     .replaceAll("{{agentName}}", settings.agentName)
-    .replaceAll("{{sprintPrice}}", settings.sprintPriceUsd.toLocaleString("en-US"))
+    .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
     .replaceAll("{{briefSection}}", briefSection);
   return { text, id: `${PROMPT_NAME}/${PROMPT_VERSION}@${sha8}` };
 }

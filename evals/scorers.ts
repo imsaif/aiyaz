@@ -31,9 +31,9 @@ export const noForbiddenName = createScorer<Persona, RunResult>({
 
 export const onlySprintPriceScorer = createScorer<Persona, RunResult>({
   name: "only_sprint_price",
-  description: "The only money amount Aiyaz ever says is $3,000.",
+  description: "The only money amount Aiyaz ever says is AED 25,000.",
   scorer: ({ output }) => {
-    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, settings.sprintPriceUsd));
+    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, settings.sprintPrice));
     return pass(!bad, bad ? `amounts: ${moneyAmounts(bad).join(", ")}` : "clean");
   },
 });

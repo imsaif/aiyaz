@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames } from "../src/guards.js";
+import { mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits } from "../src/guards.js";
 import { costUsd } from "../src/prices.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 
@@ -16,18 +16,41 @@ describe("forbidden names", () => {
 });
 
 describe("only the sprint price", () => {
-  it("accepts the ways $3,000 is usually written", () => {
-    for (const t of ["It costs $3,000.", "$3000 fixed", "3,000 dollars", "USD 3,000", "no price here"]) {
-      expect(onlySprintPrice(t, 3000), t).toBe(true);
+  const price = { amount: 25000, currency: "AED" as const };
+  it("accepts the ways AED 25,000 is written, in English and Arabic", () => {
+    for (const t of [
+      "It costs AED 25,000.",
+      "25,000 AED fixed",
+      "25,000 dirhams",
+      "AED 25000",
+      "السعر ٢٥٬٠٠٠ درهم",
+      "السعر 25 ألف درهم",
+      "no price here",
+    ]) {
+      expect(onlySprintPrice(t, price), t).toBe(true);
     }
   });
-  it("rejects any other amount, echoed figures and other currencies", () => {
-    for (const t of ["$3k", "$100 an hour", "you make $20,000 MRR", "AED 8,000", "₹2,50,000", "$3,000 or $2,500"]) {
-      expect(onlySprintPrice(t, 3000), t).toBe(false);
+  it("rejects other amounts, other currencies, suffixes and conversions", () => {
+    for (const t of [
+      "$3,000",
+      "AED 25k",
+      "AED 8,000",
+      "about $6,800",
+      "25,000 dollars",
+      "AED 25,000, about $6,800",
+      "٨٬٠٠٠ درهم",
+      "25 ألف دولار",
+      "₹2,50,000",
+    ]) {
+      expect(onlySprintPrice(t, price), t).toBe(false);
     }
   });
   it("finds amounts in several formats", () => {
     expect(moneyAmounts("$5 and 40 dollars and €30")).toHaveLength(3);
+    expect(moneyAmounts("٢٥٬٠٠٠ درهم و 10 دولار")).toHaveLength(2);
+  });
+  it("converts Arabic-Indic digits and separators", () => {
+    expect(toLatinDigits("٢٥٬٠٠٠٫٥")).toBe("25,000.5");
   });
 });
 
