@@ -7,6 +7,7 @@ export type Settings = {
   sprintPrice: SprintPrice;
   promptVersion: string;
   knowledgePack: string | null;
+  arabicEnabled: boolean;
   conversationModel: string;
   fallbackModel: string;
   judgeModel: string;
@@ -39,6 +40,8 @@ export function loadSettings(): Settings {
     promptVersion: env("AIYAZ_PROMPT_VERSION", "v2"),
     // "none" turns the market briefing pack off.
     knowledgePack: env("AIYAZ_KNOWLEDGE", "uae.v1") === "none" ? null : env("AIYAZ_KNOWLEDGE", "uae.v1"),
+    // Off until the Gulf Arabic review passes (spec section 4).
+    arabicEnabled: env("AIYAZ_ARABIC", "false") === "true",
     // Confirmed by Imran 2026-09-28.
     conversationModel: env("AIYAZ_CONVERSATION_MODEL", "claude-sonnet-5"),
     fallbackModel: env("AIYAZ_FALLBACK_MODEL", "claude-haiku-4-5"),

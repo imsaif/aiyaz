@@ -51,3 +51,21 @@ describe("v2 prompt", () => {
     );
   });
 });
+
+describe("Arabic switch", () => {
+  const v2 = { ...base, promptVersion: "v2" };
+  it("off: replies in English to other languages", () => {
+    const p = buildSystemPrompt({ ...v2, arabicEnabled: false }, null);
+    expect(p.text).toContain("you can only continue in English for now");
+    expect(p.text).not.toContain("Gulf (Khaleeji) Arabic");
+  });
+  it("on: mirrors the caller in Gulf Arabic, not Modern Standard Arabic", () => {
+    const p = buildSystemPrompt({ ...v2, arabicEnabled: true }, null);
+    expect(p.text).toContain("Gulf (Khaleeji) Arabic");
+    expect(p.text).toContain("not Modern Standard Arabic");
+    expect(p.text).not.toContain("you can only continue in English for now");
+  });
+  it("defaults to off", () => {
+    expect(base.arabicEnabled).toBe(false);
+  });
+});

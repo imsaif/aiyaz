@@ -10,6 +10,13 @@ const promptsDir = (rel: string) => fileURLToPath(new URL(`../prompts/${rel}`, i
 const ENGLISH_ONLY =
   "- If they write in another language, reply briefly in English, say you can only continue in English for now, and carry on in English.";
 
+const GULF_ARABIC = [
+  "- Reply in the language the caller uses. If they write in Arabic, reply in Gulf (Khaleeji) Arabic as spoken in the UAE, not Modern Standard Arabic.",
+  "- In Arabic, keep the same short sentences. Product and technical terms such as evals, chatbot or monitoring may stay in English, as Gulf speakers often do.",
+  '- In Arabic, say the price as "25 ألف درهم" and nothing else.',
+  "- If they switch language, switch with them.",
+].join("\n");
+
 export function formatPrice(price: SprintPrice): string {
   return `${price.currency} ${price.amount.toLocaleString("en-US")}`;
 }
@@ -33,7 +40,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
     .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
     .replaceAll("{{briefSection}}", briefSection)
     .replaceAll("{{knowledgeSection}}", pack)
-    .replaceAll("{{languageRule}}", ENGLISH_ONLY);
+    .replaceAll("{{languageRule}}", settings.arabicEnabled ? GULF_ARABIC : ENGLISH_ONLY);
   const packTag = settings.knowledgePack ? `+${settings.knowledgePack}` : "";
   return { text, id: `${PROMPT_NAME}/${settings.promptVersion}${packTag}@${sha8}` };
 }
