@@ -122,10 +122,9 @@ New personas in `evals/personas.ts`:
 
 The existing `non-english` persona keeps testing the switch-off behaviour.
 
-Human review: one native Gulf Arabic speaker on contract reads
-about 20 Arabic replies exported from the evals, with the automatic verdicts beside them,
-using a short sheet: natural Gulf phrasing, respectful tone, would a Dubai CEO keep talking.
-Claude drafts the job post and sheet; Imran posts it.
+Human review: Imran reads about 20 Arabic replies exported from the evals, with the
+automatic verdicts beside them, using a short sheet: natural Gulf phrasing, respectful tone,
+would a Dubai CEO keep talking.
 
 ## Testing
 
@@ -133,7 +132,7 @@ Claude drafts the job post and sheet; Imran posts it.
   prompt builder includes the pack and its hash; switch off keeps v1 language behaviour.
 - Evals: all existing checks plus the two Arabic scorers, across old and new personas.
 - Pass bar to turn Arabic on: dialect check passing on all Arabic turns (or reported only, if
-  the spike shows it is unreliable), judge 4+ on all, and the human reviewer signs off.
+  the spike shows it is unreliable), judge 4+ on all, and Imran signs off.
 
 ## Order of work
 
