@@ -5,6 +5,8 @@ export type SprintPrice = { amount: number; currency: "AED" };
 export type Settings = {
   agentName: string;
   sprintPrice: SprintPrice;
+  promptVersion: string;
+  knowledgePack: string | null;
   conversationModel: string;
   fallbackModel: string;
   judgeModel: string;
@@ -34,6 +36,9 @@ export function loadSettings(): Settings {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
     // Decided 2026-10-01: the sprint is priced in AED for UAE companies.
     sprintPrice: { amount: 25000, currency: "AED" },
+    promptVersion: env("AIYAZ_PROMPT_VERSION", "v1"),
+    // "none" turns the market briefing pack off.
+    knowledgePack: env("AIYAZ_KNOWLEDGE", "uae.v1") === "none" ? null : env("AIYAZ_KNOWLEDGE", "uae.v1"),
     // Confirmed by Imran 2026-09-28.
     conversationModel: env("AIYAZ_CONVERSATION_MODEL", "claude-sonnet-5"),
     fallbackModel: env("AIYAZ_FALLBACK_MODEL", "claude-haiku-4-5"),

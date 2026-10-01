@@ -5,8 +5,7 @@ import type { Brief } from "./notes.js";
 import type { Settings, SprintPrice } from "./config.js";
 
 export const PROMPT_NAME = "system";
-export const PROMPT_VERSION = "v1";
-const PROMPT_PATH = fileURLToPath(new URL(`../prompts/${PROMPT_NAME}.${PROMPT_VERSION}.md`, import.meta.url));
+const promptsDir = (rel: string) => fileURLToPath(new URL(`../prompts/${rel}`, import.meta.url));
 
 export function formatPrice(price: SprintPrice): string {
   return `${price.currency} ${price.amount.toLocaleString("en-US")}`;
@@ -14,11 +13,12 @@ export function formatPrice(price: SprintPrice): string {
 
 export type BuiltPrompt = { text: string; id: string };
 
-// The id records name, version and a content hash, so an edited file that
-// kept its version number still shows up as different in every trace.
+// The id records name, version, pack and a content hash over template and pack,
+// so an edited file that kept its version number still shows up as different in every trace.
 export function buildSystemPrompt(settings: Settings, brief: Brief | null): BuiltPrompt {
-  const template = readFileSync(PROMPT_PATH, "utf8");
-  const sha8 = createHash("sha256").update(template).digest("hex").slice(0, 8);
+  const template = readFileSync(promptsDir(`${PROMPT_NAME}.${settings.promptVersion}.md`), "utf8");
+  const pack = settings.knowledgePack ? readFileSync(promptsDir(`knowledge/${settings.knowledgePack}.md`), "utf8") : "";
+  const sha8 = createHash("sha256").update(template).update(pack).digest("hex").slice(0, 8);
   const briefSection = brief
     ? [
         `You have a research brief on ${brief.company}. Every item below is UNCONFIRMED until the prospect confirms it:`,
@@ -28,8 +28,10 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
   const text = template
     .replaceAll("{{agentName}}", settings.agentName)
     .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
-    .replaceAll("{{briefSection}}", briefSection);
-  return { text, id: `${PROMPT_NAME}/${PROMPT_VERSION}@${sha8}` };
+    .replaceAll("{{briefSection}}", briefSection)
+    .replaceAll("{{knowledgeSection}}", pack);
+  const packTag = settings.knowledgePack ? `+${settings.knowledgePack}` : "";
+  return { text, id: `${PROMPT_NAME}/${settings.promptVersion}${packTag}@${sha8}` };
 }
 
 // Said by code, never by the model, so the AI disclosure is guaranteed.
