@@ -61,4 +61,4 @@ These are general business norms in the UAE, not rules.
 - Decisions in family-owned businesses often rest with the owner or a senior family member, even when someone else runs the project.
 - WhatsApp is the normal channel after a first contact; email is common for formal documents.
 - The UAE work week is Monday to Friday. During Ramadan, working hours are shorter and meetings move later in the day.
-- Many people mix English and Arabic. Answer in the language they use.
+- Many people mix English and Arabic in the same conversation.

@@ -33,7 +33,7 @@ describe("judge verdict parsing", () => {
 
 describe("labelling a long reply", () => {
   it("splits on Arabic and Latin sentence ends and line breaks", () => {
-    expect(sentences("أهلا. شلونك؟ زين!\nتمام")).toEqual(["أهلا.", "شلونك؟", "زين!", "تمام"]);
+    expect(sentences("أهلا وسهلا. شلونك اليوم؟ زين والله!\nتمام الحمدلله")).toEqual(["أهلا وسهلا.", "شلونك اليوم؟", "زين والله!", "تمام الحمدلله"]);
   });
   it("takes the most common sentence label", () => {
     expect(replyLabel(["MUS", "MSA", "DOH", "MUS"])).toBe("MUS");
@@ -43,5 +43,11 @@ describe("labelling a long reply", () => {
   });
   it("is MSA when most sentences are MSA", () => {
     expect(replyLabel(["MSA", "MSA", "DOH"])).toBe("MSA");
+  });
+});
+
+describe("only Arabic sentences are labelled", () => {
+  it("drops sentences with fewer than two Arabic words", () => {
+    expect(sentences("نقدر نسوي هذا. Evals, monitoring. AED 25,000. 25 ألف درهم")).toEqual(["نقدر نسوي هذا.", "25 ألف درهم"]);
   });
 });

@@ -104,7 +104,8 @@ export const noUnconfirmedFact = createScorer<Persona, RunResult>({
 
 const ARABIC = /[\u0600-\u06FF]/;
 const REVIEW_FILE = "arabic-review.jsonl";
-const arabicTurns = (r: RunResult) => aiyazTurns(r).filter((t) => ARABIC.test(t));
+// A turn counts as Arabic only if it has a real Arabic sentence, not just an Arabic price or word.
+const arabicTurns = (r: RunResult) => aiyazTurns(r).filter((t) => ARABIC.test(t) && sentences(t).length > 0);
 
 function dialectOf(texts: string[]): { label: string; score: number }[] {
   const out = spawnSync("evals/arabic/.venv/bin/python", ["evals/arabic/dialect.py"], {
@@ -149,5 +150,15 @@ export const arabicNaturalness = createScorer<Persona, RunResult>({
     const low = verdicts.findIndex((v) => v.score < 4);
     const bad = verdicts[low];
     return pass(!bad, bad ? `turn ${low} scored ${bad.score}: ${bad.reason}` : "all 4+");
+  },
+});
+
+export const englishWhenOff = createScorer<Persona, RunResult>({
+  name: "english_when_off",
+  description: "With the Arabic switch off, Aiyaz never replies in Arabic.",
+  scorer: ({ output }) => {
+    if (settings.arabicEnabled) return pass(true, "Arabic switch on");
+    const hit = arabicTurns(output)[0];
+    return pass(!hit, hit ? `replied in Arabic: ${hit.slice(0, 120)}` : "English only");
   },
 });

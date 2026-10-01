@@ -13,8 +13,12 @@ export function dialectVerdict(labels: string[], gate: "fail" | "report"): { ok:
 }
 
 // CAMeL is unreliable on long text, so a reply is labelled sentence by sentence.
+// Sentences with fewer than two Arabic words ("AED 25,000.", "Evals, monitoring.") are
+// dropped: once Latin letters are stripped, CAMeL labels them MSA.
 export function sentences(text: string): string[] {
-  return (text.match(/[^.!?؟\n]+[.!?؟]?/g) ?? []).map((s) => s.trim()).filter(Boolean);
+  return (text.match(/[^.!?؟\n]+[.!?؟]?/g) ?? [])
+    .map((s) => s.trim())
+    .filter((s) => (s.match(/[\u0600-\u06FF]+/g) ?? []).length >= 2);
 }
 
 const mostCommon = (labels: string[]): string => {

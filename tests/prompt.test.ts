@@ -21,6 +21,10 @@ describe("system prompt", () => {
     const pack = readFileSync(new URL("../prompts/knowledge/uae.v1.md", import.meta.url), "utf8");
     expect(moneyAmounts(pack)).toEqual([]);
   });
+  it("the pack gives no language instruction, so it cannot override the Arabic switch", () => {
+    const pack = readFileSync(new URL("../prompts/knowledge/uae.v1.md", import.meta.url), "utf8");
+    expect(pack).not.toMatch(/answer in|reply in/i);
+  });
   it("leaves no unfilled placeholders", () => {
     const p = buildSystemPrompt(base, null);
     expect(p.text).not.toMatch(/\{\{\w+\}\}/);
