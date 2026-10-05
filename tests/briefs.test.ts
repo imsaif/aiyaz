@@ -39,6 +39,17 @@ describe("briefs", () => {
     );
     expect(brief?.facts).toEqual([fact]);
   });
+  it("drops money figures written without a currency symbol, in words or in Indian units", async () => {
+    const amounts = [
+      "raised 12M", "raised 40m", "a 2B valuation", "raised 12 mn", "grew to 5k", "valued at 3 bn",
+      "raised 50 crore", "raised 20 lakh", "raised 20 lakhs", "twelve million dollars", "raised five million",
+      "worth two billion", "a seven figures deal", "an eight-figure round", "raised 1.5 Cr",
+    ];
+    const facts = amounts.map((text) => ({ text, source: "https://acme.example/press" }));
+    const plain = { text: "Acme sells software to clinics", source: "https://acme.example/about" };
+    const brief = await loadBrief(await store({ company: "Acme", facts: [...facts, plain] }), "acme-7k2q");
+    expect(brief?.facts).toEqual([plain]);
+  });
   it("is null when no usable fact is left, so the call runs as a homepage call", async () => {
     expect(await loadBrief(await store({ company: "Acme", facts: [{ text: "raised $5M", source: "s" }] }), "acme-7k2q")).toBeNull();
   });

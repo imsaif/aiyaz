@@ -14,7 +14,12 @@ export const isValidSlug = (slug: string) => SLUG.test(slug);
 const MAX_FACTS = 8;
 const MAX_FACT_CHARS = 300;
 const MAX_COMPANY_CHARS = 80;
-const WORDED_BIG_NUMBER = /\d[\d.,]*\s?(?:million|billion|bn)\b/i;
+// Money with no currency sign: "12M", "5k", "50 crore", "two billion", "seven figures".
+// Broad on purpose: a false positive ("12M users") only drops a fact.
+const BARE_SUFFIX = /\d[\d.,]*\s?(?:k|m|mn|b|bn|cr|million|billion|crore|lakh)s?\b/i;
+const BIG_WORD = /\b(?:million|billion|trillion|crore|lakh)s?\b/i;
+const FIGURES = /\b(?:\w+)[\s-]figures?\b/i;
+const WORDED_BIG_NUMBER = new RegExp(`${BARE_SUFFIX.source}|${BIG_WORD.source}|${FIGURES.source}`, "i");
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
