@@ -7,7 +7,7 @@ export const AGENT_NAME = "aiyaz";
 
 export type CallMeta = { country: string | null; slug: string | null; email: string | null };
 
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+export const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 export function parseCallMeta(raw: string | null | undefined): CallMeta {
   let v: unknown;

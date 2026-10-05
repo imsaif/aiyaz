@@ -154,6 +154,29 @@ describe("a turn", () => {
   });
 });
 
+describe("visitor email", () => {
+  it("exposes visitor_email on the record_notes tool", async () => {
+    const llm = new FakeLLM([[text("Hello.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("hi");
+    const t = (llm.requests[0]!.tools as { name: string }[]).find((x) => x.name === "record_notes") as unknown as { input_schema: { properties: Record<string, unknown> } };
+    expect(t.input_schema.properties).toHaveProperty("visitor_email");
+  });
+  it("keeps a valid email from record_notes and drops an invalid one", async () => {
+    const llm = new FakeLLM([
+      [text("Thanks. Anything else?"), tool("record_notes", { visitor_email: "nope" })],
+      [text("Thanks. Anything else?"), tool("record_notes", { visitor_email: " Sam@Acme.test " })],
+    ]);
+    const c = make(llm);
+    c.start();
+    await c.reply("it is nope");
+    expect(c.notes.visitor_email).toBeNull();
+    await c.reply("sam at acme dot test");
+    expect(c.notes.visitor_email).toBe("sam@acme.test");
+  });
+});
+
 describe("limits", () => {
   it("can be ended from outside with the fixed wrap-up line, without a model call", () => {
     const llm = new FakeLLM([]);

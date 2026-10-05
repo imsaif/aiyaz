@@ -18,6 +18,10 @@ const GULF_ARABIC = [
   "- If they switch language, switch with them.",
 ].join("\n");
 
+// Only a lead call (one with a company brief) asks for an email.
+const EMAIL_STEP =
+  "This is a call with a company brief. Before your closing summary, ask for their email so the team can send them the summary, and when they give it, record it with `record_notes` `visitor_email`. If they decline, carry on without it.";
+
 // How the prompt places the caller. A pack with no entry gets no place name.
 const MARKET_WHERE: Record<string, string> = { "uae.v1": " in the UAE" };
 
@@ -43,6 +47,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
     .replaceAll("{{agentName}}", settings.agentName)
     .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
     .replaceAll("{{briefSection}}", briefSection)
+    .replaceAll("{{emailStep}}", brief ? EMAIL_STEP : "")
     .replaceAll("{{knowledgeSection}}", pack)
     .replaceAll("{{marketWhere}}", settings.knowledgePack ? (MARKET_WHERE[settings.knowledgePack] ?? "") : "")
     // The Gulf Arabic rule quotes the AED price, so it only applies to AED visitors.

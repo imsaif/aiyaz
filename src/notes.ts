@@ -1,4 +1,5 @@
 // What Aiyaz learns, kept as structured fields rather than free text.
+import { EMAIL } from "./voice/meta.js";
 
 export type BriefFact = { text: string; source: string };
 export type Brief = { company: string; facts: BriefFact[] };
@@ -12,6 +13,7 @@ export type Notes = {
   tried: string[];
   confirmedFacts: string[];
   unconfirmedFacts: string[];
+  visitor_email: string | null;
 };
 
 export function emptyNotes(brief: Brief | null): Notes {
@@ -25,6 +27,7 @@ export function emptyNotes(brief: Brief | null): Notes {
     confirmedFacts: [],
     // Everything in a brief starts unconfirmed until the prospect says so.
     unconfirmedFacts: brief ? brief.facts.map((f) => f.text) : [],
+    visitor_email: null,
   };
 }
 
@@ -37,6 +40,7 @@ export type NotesUpdate = {
   add_tried?: string[];
   confirm_facts?: string[];
   reject_facts?: string[];
+  visitor_email?: string;
 };
 
 const addUnique = (list: string[], items: string[] | undefined) => {
@@ -52,6 +56,9 @@ export function applyNotesUpdate(notes: Notes, update: NotesUpdate): Notes {
   if (update.users?.trim()) next.users = update.users.trim();
   if (update.ai_feature?.trim()) next.aiFeature = update.ai_feature.trim();
   if (update.owner?.trim()) next.owner = update.owner.trim();
+  // Same check as the token function. An invalid value never replaces a stored one.
+  const email = typeof update.visitor_email === "string" ? update.visitor_email.trim().toLowerCase() : "";
+  if (EMAIL.test(email)) next.visitor_email = email;
   addUnique(next.symptoms, update.add_symptoms);
   addUnique(next.tried, update.add_tried);
   // Only facts already on the unconfirmed list can be confirmed. The model

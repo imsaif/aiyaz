@@ -132,3 +132,21 @@ describe("v3 prompt by country", () => {
     );
   });
 });
+
+describe("lead-call email step", () => {
+  const brief = { company: "Acme", facts: [{ text: "launched an AI support bot", source: "https://acme.test" }] };
+  it("a lead call asks for the visitor's email before the summary and records it", () => {
+    const text = buildSystemPrompt(base, brief).text;
+    expect(text).toContain("ask for their email");
+    expect(text).toContain("visitor_email");
+    expect(text).toContain("the team");
+    expect(text).not.toContain("Imran");
+    expect(text).not.toContain("\u2014");
+    expect(text).not.toMatch(/\{\{\w+\}\}/);
+  });
+  it("a call with no brief does not ask for an email", () => {
+    const text = buildSystemPrompt(base, null).text;
+    expect(text).not.toContain("visitor_email");
+    expect(text).not.toContain("ask for their email");
+  });
+});
