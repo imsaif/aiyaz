@@ -1,5 +1,7 @@
 // Checks shared by the live conversation and the evals.
 
+import type { Currency, SprintPrice } from "./config.js";
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Replaces any forbidden name (e.g. "Imran", "Imran's") with "the team".
@@ -29,6 +31,7 @@ export function toLatinDigits(text: string): string {
 const AR_CURRENCY = "درهم|دراهم|دولار|روبية|يورو|جنيه";
 const MONEY = new RegExp(
   [
+    String.raw`(?:\d[\d,]*(?:\.\d+)?\s?thousand\s?(?:US\s?)?(?:dollars|dirhams?)\b)`,
     String.raw`(?:(?:\$|US\$|USD|AED|Dhs?\.?|EUR|GBP|INR|Rs\.?|€|£|₹)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:k|K|m|M)\b)?)`,
     String.raw`(?:\d[\d,]*(?:\.\d+)?\s?(?:k|K)?\s?(?:US\s?)?(?:dollars|usd|aed|euros|pounds|rupees|dirhams?)\b)`,
     String.raw`(?:\d[\d,]*(?:\.\d+)?\s?(?:(?:[أا]لف|آلاف)\s?)?(?:${AR_CURRENCY}))`,
@@ -44,20 +47,30 @@ export function moneyAmounts(text: string): string[] {
   return toLatinDigits(text).match(MONEY) ?? [];
 }
 
-// True when every money amount in the text is the sprint price, in its own currency.
-// Only AED amounts are recognised so far; a USD price makes any amount fail until a later task adds USD.
-export function onlySprintPrice(text: string, price: { amount: number; currency: "AED" | "USD" }): boolean {
+const CURRENCY_OF: [Currency, RegExp][] = [
+  ["AED", /AED|Dhs?|dirham|درهم|دراهم/i],
+  ["USD", /\$|USD|\bUS\b|dollars|دولار/i],
+];
+const OTHER_CURRENCY = /EUR|GBP|INR|\bRs\b\.?|€|£|₹|euros|pounds|rupees|روبية|يورو|جنيه/i;
+
+// True when every money amount in the text is the visitor's own sprint price, in its own currency.
+export function onlySprintPrice(text: string, price: SprintPrice): boolean {
   if (WORDED_AMOUNT.test(text) && !/\d/.test(text.match(WORDED_AMOUNT)?.[0] ?? "")) {
-    // Allow only the price itself written as "25 ألف درهم"; any amount spelled out in words fails.
+    // "25 ألف درهم" and "6 thousand dollars" are parsed below; an amount spelled out in words fails.
     const before = text.slice(0, text.search(WORDED_AMOUNT));
     if (!/\d\s*$/.test(toLatinDigits(before))) return false;
   }
   return moneyAmounts(text).every((m) => {
-    const isAed = /AED|Dhs?|dirham|درهم|دراهم/i.test(m);
-    const other = /\$|USD|\bUS\b|dollars|EUR|GBP|INR|Rs\.?|€|£|₹|euros|pounds|rupees|دولار|روبية|يورو|جنيه/i.test(m);
+    const currencies = CURRENCY_OF.filter(([, re]) => re.test(m)).map(([c]) => c);
     const hasSuffix = /\d\s?(?:k|K|m|M)\b/.test(m);
     let value = Number((m.match(/\d[\d,]*(?:\.\d+)?/)?.[0] ?? "").replace(/,/g, ""));
-    if (/[أا]لف|آلاف/.test(m)) value *= 1000;
-    return isAed && !other && !hasSuffix && value === price.amount;
+    if (/thousand|[أا]لف|آلاف/i.test(m)) value *= 1000;
+    return (
+      currencies.length === 1 &&
+      currencies[0] === price.currency &&
+      !OTHER_CURRENCY.test(m) &&
+      !hasSuffix &&
+      value === price.amount
+    );
   });
 }

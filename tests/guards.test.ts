@@ -66,6 +66,46 @@ describe("only the sprint price", () => {
   });
 });
 
+describe("only the sprint price, USD visitor", () => {
+  const usd = { amount: 6000, currency: "USD" as const };
+  it("accepts the ways USD 6,000 is written", () => {
+    for (const t of [
+      "It costs $6,000.",
+      "USD 6,000 fixed",
+      "US$6,000",
+      "6,000 dollars",
+      "6,000 US dollars",
+      "6,000 USD",
+      "6 thousand dollars",
+      "no price here",
+    ]) {
+      expect(onlySprintPrice(t, usd), t).toBe(true);
+    }
+  });
+  it("rejects other amounts, AED, suffixes and conversions", () => {
+    for (const t of [
+      "$3,000",
+      "$6k",
+      "USD 6,000.50",
+      "AED 25,000",
+      "6,000 AED",
+      "$6,000, about AED 22,000",
+      "six thousand dollars",
+      "8 thousand dollars",
+      "₹5,00,000",
+      "€6,000",
+    ]) {
+      expect(onlySprintPrice(t, usd), t).toBe(false);
+    }
+  });
+  it("an AED visitor still may not hear dollars, even the USD price", () => {
+    const aed = { amount: 25000, currency: "AED" as const };
+    expect(onlySprintPrice("$6,000", aed)).toBe(false);
+    expect(onlySprintPrice("25 thousand dirhams", aed)).toBe(true);
+    expect(onlySprintPrice("8 thousand dirhams", aed)).toBe(false);
+  });
+});
+
 describe("cost", () => {
   it("prices Sonnet 5 at $2 in and $10 out per million tokens", () => {
     expect(costUsd("claude-sonnet-5", { input_tokens: 1_000_000, output_tokens: 1_000_000 })).toBeCloseTo(12);
