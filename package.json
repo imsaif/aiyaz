@@ -8,7 +8,8 @@
     "evals": "evalite run",
     "evals:watch": "evalite watch",
     "typecheck": "tsc --noEmit",
-    "review:arabic": "tsx evals/arabic/sheet.ts"
+    "review:arabic": "tsx evals/arabic/sheet.ts",
+    "briefs": "tsx --env-file-if-exists=.env scripts/push-briefs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0"
