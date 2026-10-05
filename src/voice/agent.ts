@@ -114,7 +114,8 @@ export default defineAgent({
       );
     });
 
-    await session.start({ agent: new voice.Agent({ instructions: "" }), room: ctx.room });
+    // record: LiveKit Cloud session reports carry transcript and audio, so they stay off by default.
+    await session.start({ agent: new voice.Agent({ instructions: "" }), room: ctx.room, record: settings.livekitRecord });
     // Fixed text from code: the AI disclosure never depends on the model.
     session.say(brain.start(), { allowInterruptions: false });
   },

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { forCountry, loadSettings, normCountry, priceKey } from "../src/config.js";
 
 const base = loadSettings();
@@ -88,5 +88,25 @@ describe("voice model setting", () => {
   it("is empty (provider default) when unset, and passes any value through", () => {
     withModel(undefined, () => expect(loadSettings().ttsModel).toBe(""));
     withModel("eleven_flash_v2_5", () => expect(loadSettings().ttsModel).toBe("eleven_flash_v2_5"));
+  });
+});
+
+describe("LiveKit Cloud recording setting", () => {
+  const saved = process.env.AIYAZ_LIVEKIT_RECORD;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.AIYAZ_LIVEKIT_RECORD;
+    else process.env.AIYAZ_LIVEKIT_RECORD = saved;
+  });
+  const withRecord = (value: string | undefined) => {
+    if (value === undefined) delete process.env.AIYAZ_LIVEKIT_RECORD;
+    else process.env.AIYAZ_LIVEKIT_RECORD = value;
+    return loadSettings().livekitRecord;
+  };
+  it("is off unless AIYAZ_LIVEKIT_RECORD is exactly true", () => {
+    expect(withRecord(undefined)).toBe(false);
+    expect(withRecord("")).toBe(false);
+    expect(withRecord("false")).toBe(false);
+    expect(withRecord("yes")).toBe(false);
+    expect(withRecord("true")).toBe(true);
   });
 });

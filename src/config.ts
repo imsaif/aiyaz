@@ -40,6 +40,9 @@ export type Settings = {
   ttsVoiceId: string;
   // ElevenLabs model id (for example eleven_flash_v2_5); empty means the plugin default.
   ttsModel: string;
+  // LiveKit Cloud session recording (transcript, audio, traces). Off: transcripts live only in
+  // Upstash for transcriptDays. Turn on for debugging only.
+  livekitRecord: boolean;
 };
 
 const env = (key: string, fallback: string) => process.env[key] ?? fallback;
@@ -142,5 +145,6 @@ export function loadSettings(): Settings {
     ttsProvider: ttsFromEnv(),
     ttsVoiceId: env("AIYAZ_TTS_VOICE_ID", ""),
     ttsModel: env("AIYAZ_TTS_MODEL", ""),
+    livekitRecord: env("AIYAZ_LIVEKIT_RECORD", "false") === "true",
   };
 }
