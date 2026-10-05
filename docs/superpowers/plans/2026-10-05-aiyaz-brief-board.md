@@ -1657,7 +1657,7 @@ git commit -m "Saved boards in Upstash for 30 days; board id in the call metadat
 
 **Files:**
 - Create: `src/voice/board-link.ts`, `src/voice/call-start.ts`
-- Modify: `src/voice/agent.ts` (whole file shown below), `scripts/push-briefs.ts:26` and `:49` (lead links)
+- Modify: `src/board.ts` (add `saveUnlessNewer`), `src/voice/agent.ts` (whole file shown below), `scripts/push-briefs.ts:26` and `:49` (lead links)
 - Test: `tests/board-link.test.ts`
 
 **Interfaces:**
@@ -1665,13 +1665,14 @@ git commit -m "Saved boards in Upstash for 30 days; board id in the call metadat
 - Produces:
   - `src/voice/board-link.ts`: `BOARD_TOPIC = "aiyaz.board"`, `EDIT_METHOD = "aiyaz.edit"`, `EDIT_REJECTED = 2400`, `class BoardLink` with `constructor(io: { send(json: string): Promise<void>; save(board: Board): Promise<void>; log(what: string): void })`, `push(board: Board): void`, `flush(): Promise<void>`.
   - `src/voice/call-start.ts`: `type CallStart = { brief: Brief | null; saved: SavedStart | null; company: string | null; slug: string | null }`, `callStart(kv: KV | null, meta: CallMeta): Promise<CallStart>`.
+  - `src/board.ts`: `saveUnlessNewer(kv: KV, id: string, board: Board): Promise<boolean>` (skips the save when the stored board has a later `updatedAt`, so a visitor's PUT edit after the call is never overwritten by a late worker save; returns whether it saved).
   - Page contract (Task 10 relies on it): the worker sends the whole board JSON on text stream topic `aiyaz.board` once after it joins and after every change; RPC `aiyaz.edit` with payload `JSON.stringify({ card, value })` answers `"ok"` or fails with `RpcError` code `2400`, message `"invalid edit"`.
 
 - [ ] **Step 1: Write the failing test** `tests/board-link.test.ts`
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { BOARD_KEY, boardFromNotes, knownFromBrief, saveBoard, type Board } from "../src/board.js";
+import { BOARD_KEY, boardFromNotes, knownFromBrief, loadBoard, saveBoard, saveUnlessNewer, type Board } from "../src/board.js";
 import { MemoryKV } from "../src/kv.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 import { BoardLink } from "../src/voice/board-link.js";
@@ -1735,6 +1736,24 @@ describe("BoardLink", () => {
   it("flush resolves at once when nothing is waiting", async () => {
     const link = new BoardLink({ send: async () => {}, save: async () => {}, log: () => {} });
     await expect(link.flush()).resolves.toBeUndefined();
+  });
+});
+
+describe("saveUnlessNewer", () => {
+  const id = "AbCdEfGhIjKlMnOpQr_-12";
+  const at = (iso: string, company: string): Board => ({ ...boardNamed(company), updatedAt: iso });
+  it("a later PUT edit wins over a late worker save", async () => {
+    const kv = new MemoryKV();
+    await saveBoard(kv, id, at("2026-10-05T10:05:00.000Z", "Edited after the call"));
+    expect(await saveUnlessNewer(kv, id, at("2026-10-05T10:04:59.000Z", "Worker"))).toBe(false);
+    expect((await loadBoard(kv, id))?.company).toBe("Edited after the call");
+  });
+  it("saves when nothing newer is stored", async () => {
+    const kv = new MemoryKV();
+    expect(await saveUnlessNewer(kv, id, at("2026-10-05T10:00:00.000Z", "First"))).toBe(true);
+    expect(await saveUnlessNewer(kv, id, at("2026-10-05T10:01:00.000Z", "Second"))).toBe(true);
+    expect((await loadBoard(kv, id))?.company).toBe("Second");
+    expect(kv.ttl.get(BOARD_KEY(id))).toBe(2_592_000);
   });
 });
 
@@ -1863,7 +1882,22 @@ export async function callStart(kv: KV | null, meta: CallMeta): Promise<CallStar
 }
 ```
 
-- [ ] **Step 5: Wire the worker.** Replace `src/voice/agent.ts` with:
+- [ ] **Step 5: Never overwrite a newer board.** Add to `src/board.ts`, after `saveBoard`:
+
+```ts
+// The worker's saves run after the visitor may have edited the board with PUT (after the call,
+// or when phase 2 findings land late). A stored board with a later updatedAt wins.
+export async function saveUnlessNewer(kv: KV, id: string, board: Board): Promise<boolean> {
+  const stored = await loadBoard(kv, id);
+  if (stored && stored.updatedAt > board.updatedAt) return false;
+  await saveBoard(kv, id, board);
+  return true;
+}
+```
+
+(Both sides write `updatedAt` as `new Date(...).toISOString()`, so the strings compare in time order.)
+
+- [ ] **Step 6: Wire the worker.** Replace `src/voice/agent.ts` with:
 
 ```ts
 // The Aiyaz voice worker: LiveKit hears and speaks, the Conversation decides what to say.
@@ -1875,7 +1909,7 @@ import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import * as silero from "@livekit/agents-plugin-silero";
 import { RoomEvent, RpcError } from "@livekit/rtc-node";
 import { fileURLToPath } from "node:url";
-import { boardUrl, parseEdit, saveBoard } from "../board.js";
+import { boardUrl, parseEdit, saveUnlessNewer } from "../board.js";
 import { buildCallLog, sendCallEmails, storeCall } from "../calllog.js";
 import { forCountry, loadSettings, type Settings } from "../config.js";
 import { Conversation } from "../conversation.js";
@@ -1933,7 +1967,10 @@ export default defineAgent({
         if (!me || ctx.room.remoteParticipants.size === 0) return;
         await me.sendText(json, { topic: BOARD_TOPIC });
       },
-      save: (board) => (kv && meta.board ? saveBoard(kv, meta.board, board) : Promise.resolve()),
+      // A visitor's PUT edit made after the call is newer and is never overwritten.
+      save: async (board) => {
+        if (kv && meta.board) await saveUnlessNewer(kv, meta.board, board);
+      },
       log: (what) => console.error(`[board] ${brain.id} ${what}`),
     });
 
@@ -1997,10 +2034,10 @@ export default defineAgent({
       stopTimer();
       if (logged) return;
       logged = true;
-      // The final board is saved before the emails link to it.
-      const board = brain.board();
-      link.push(board);
+      // Every change was already pushed; wait for those saves before the emails link to the board.
+      // No extra push here: it could land after a visitor's post-call edit.
       await link.flush();
+      const board = brain.board();
       const log = buildCallLog({
         id: brain.id,
         startedAt,
@@ -2060,17 +2097,17 @@ cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName:
 
 Note: `brain` is used inside `link`'s `log` closure before its `const` line; the closure only runs after a push, which happens after `brain` exists.
 
-- [ ] **Step 6: Lead links go to the page.** In `scripts/push-briefs.ts` change both `https://getaiengineer.dev/?ref=` (lines 26 and 49) to `https://getaiengineer.dev/aiyaz?ref=`.
+- [ ] **Step 7: Lead links go to the page.** In `scripts/push-briefs.ts` change both `https://getaiengineer.dev/?ref=` (lines 26 and 49) to `https://getaiengineer.dev/aiyaz?ref=`.
 
-- [ ] **Step 7: Run the tests and the typecheck**
+- [ ] **Step 8: Run the tests and the typecheck**
 
 Run: `pnpm test; echo $?` then `pnpm typecheck; echo $?`
 Expected: `0` twice. If `RpcError` is not exported from the `@livekit/rtc-node` root in the installed build, import it from `@livekit/rtc-node` exactly as `index.d.ts:19` shows; do not change the code number.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/voice/board-link.ts src/voice/call-start.ts src/voice/agent.ts scripts/push-briefs.ts tests/board-link.test.ts
+git add src/board.ts src/voice/board-link.ts src/voice/call-start.ts src/voice/agent.ts scripts/push-briefs.ts tests/board-link.test.ts
 git commit -m "Worker: board sent on aiyaz.board and saved after every change, newest last; edits by RPC aiyaz.edit; Talk again starts from the saved board; lead links point at /aiyaz"
 ```
 
@@ -4352,6 +4389,15 @@ describe("researchCompany", () => {
       });
     }
   });
+  it("a search paused by the server counts as an error, with its cost", async () => {
+    const paused: LLMClient = {
+      create: async () => ({ message: { ...msg([search("s1"), results("s1", [NEWS])]), stop_reason: "pause_turn" } as Anthropic.Message, fallbackUsed: false }),
+    };
+    const out = await researchCompany("Acme", { llm: paused, model: "claude-sonnet-5", maxSearches: 5, timeoutMs: 1000 });
+    expect(out.error).toBe(true);
+    expect(out.facts).toEqual([]);
+    expect(out.costUsd).toBeCloseTo(0.024);
+  });
   it("sends exactly the request researchRequest builds", async () => {
     const sent: CreateParams[] = [];
     const rec: LLMClient = { create: async (p) => { sent.push(p); return ok.create(p); } };
@@ -4541,6 +4587,8 @@ export async function researchCompany(
     const result = await Promise.race([opts.llm.create(researchRequest(company, opts.model, opts.maxSearches)), timeout]);
     if (!result) return NOTHING;
     const m = result.message;
+    // Paused mid-search: no answer yet. Counted as an error, so a later "Talk again" may try again.
+    if (m.stop_reason === "pause_turn") return { ...NOTHING, costUsd: researchCostUsd(m) };
     return {
       facts: parseFindings(m),
       costUsd: researchCostUsd(m),
@@ -4900,7 +4948,7 @@ Right after the `const brain = new Conversation({...});` statement add:
     });
 ```
 
-In the shutdown callback, before `const board = brain.board();` add `await research.done();` (bounded by the 20 s research timeout), so the findings are on the saved board and in the call log.
+In the shutdown callback, before `await link.flush();` add `await research.done();` (bounded by the 20 s research timeout), so the findings are pushed, saved (unless the visitor has edited the board since, see `saveUnlessNewer`) and in the call log.
 
 At the end of `entry`, after `link.push(brain.board());` add:
 
