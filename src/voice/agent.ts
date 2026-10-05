@@ -59,9 +59,10 @@ export default defineAgent({
       brief,
     });
 
-    const brainLlm = new BrainLLM(brain);
     // A reply the visitor cut off is trimmed to what they heard, in the history and the transcript.
+    // The next reply waits (bounded) for that report, because LiveKit starts it first.
     const playout = new PlayoutTracker((turnId, played) => brainLlm.turns.played(turnId, played));
+    const brainLlm = new BrainLLM(brain, { playoutDone: (turnId) => playout.settled(turnId) });
 
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,

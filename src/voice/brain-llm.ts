@@ -1,7 +1,7 @@
 // Plugs the Aiyaz brain into LiveKit in place of an LLM plugin. LiveKit hears, decides when
 // the visitor has finished and speaks; the brain decides what to say, once per turn.
 import { DEFAULT_API_CONNECT_OPTIONS, llm } from "@livekit/agents";
-import { TurnRunner, type Brain } from "./turns.js";
+import { TurnRunner, type Brain, type TurnRunnerOptions } from "./turns.js";
 
 type StreamOpts = ConstructorParameters<typeof llm.LLMStream>[1];
 
@@ -28,9 +28,9 @@ export class BrainLLM extends llm.LLM {
   // Public so the worker can report replies the visitor cut off.
   readonly turns: TurnRunner;
 
-  constructor(brain: Brain) {
+  constructor(brain: Brain, options: TurnRunnerOptions = {}) {
     super();
-    this.turns = new TurnRunner(brain);
+    this.turns = new TurnRunner(brain, options);
   }
 
   label(): string {

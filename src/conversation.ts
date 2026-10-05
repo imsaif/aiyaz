@@ -59,6 +59,17 @@ const CUT_OFF_SILENT_NOTE = "(The prospect cut you off before they heard your la
 
 // What one reply added, so it can be trimmed to what the visitor heard.
 type ReplyRecord = { assistant: Anthropic.MessageParam[]; turn: Turn | undefined; settled: boolean };
+// LiveKit reports a cut-off within a turn or two, so older replies are not kept.
+const TRACKED_REPLIES = 2;
+
+// Played text counts only if it holds at least one whole word of the reply ("We" of "Weekly" does not).
+function wholeWordsOf(played: string, said: string): string {
+  const kept = played.trim();
+  if (!kept) return "";
+  if (/\s/.test(kept)) return kept;
+  const next = said.trim().charAt(kept.length);
+  return said.trim().startsWith(kept) && !/[\p{L}\p{N}]/u.test(next) ? kept : "";
+}
 
 export type ConversationDeps = {
   settings: Settings;
@@ -127,6 +138,7 @@ export class Conversation {
           turn: this.transcript.slice(firstTurn).find((t) => t.role === "aiyaz"),
           settled: false,
         });
+        for (const old of [...this.replies.keys()].slice(0, -TRACKED_REPLIES)) this.replies.delete(old);
       }
       return said;
     } finally {
@@ -145,7 +157,7 @@ export class Conversation {
     const record = this.replies.get(turnId);
     if (!record || record.settled) return;
     record.settled = true;
-    const kept = played.trim();
+    const kept = wholeWordsOf(played, record.turn?.text ?? "");
     let placed = false;
     for (const message of record.assistant) {
       // Tool calls stay, so every tool result still has its call.
@@ -162,7 +174,13 @@ export class Conversation {
       if (kept) Object.assign(record.turn, { text: kept, interrupted: true });
       else this.transcript.splice(this.transcript.indexOf(record.turn), 1);
     }
-    this.cutOffNote = kept ? CUT_OFF_NOTE : CUT_OFF_SILENT_NOTE;
+    // The note says "your last reply", so it only fits when no reply has been given since.
+    if ([...this.replies.keys()].at(-1) === turnId) this.cutOffNote = kept ? CUT_OFF_NOTE : CUT_OFF_SILENT_NOTE;
+  }
+
+  // How many replies can still be trimmed by heard() (for tests).
+  get trackedReplies(): number {
+    return this.replies.size;
   }
 
   private async answer(prospectText: string): Promise<string> {

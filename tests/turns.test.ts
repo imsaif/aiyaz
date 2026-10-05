@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HANGUP_PLAYOUT_CAP_MS, TurnRunner, makeHangUp, startCallTimer, type Brain } from "../src/voice/turns.js";
+import { HANGUP_PLAYOUT_CAP_MS, PLAYOUT_WAIT_MS, TurnRunner, makeHangUp, startCallTimer, type Brain } from "../src/voice/turns.js";
 
 function fakeBrain(ms = 5, endAfter = Infinity) {
   let running = 0;
@@ -164,5 +164,77 @@ describe("TurnRunner and what was heard", () => {
     turns.played("t2", "");
     await new Promise((r) => setTimeout(r, 10));
     expect(log.filter((l) => l.startsWith("heard"))).toEqual(['heard t1 "a"']);
+  });
+});
+
+describe("TurnRunner waits for the previous reply's playout", () => {
+  const recorder = () => {
+    const log: string[] = [];
+    const brain = {
+      ended: false,
+      async reply(text: string, turnId?: string) {
+        log.push(`reply ${turnId}`);
+        await new Promise((r) => setTimeout(r, 2));
+        return `answer to ${text}`;
+      },
+      heard(turnId: string, played: string) {
+        log.push(`heard ${turnId} "${played}"`);
+      },
+    };
+    return { brain: brain satisfies Brain, log };
+  };
+
+  it("a cut-off report that arrives after the next turn started still lands before the next reply", async () => {
+    const { brain, log } = recorder();
+    let finishT1: () => void = () => {};
+    const t1Done = new Promise<void>((r) => (finishT1 = r));
+    const turns = new TurnRunner(brain, { playoutDone: (id) => (id === "t1" ? t1Done : Promise.resolve()) });
+    await turns.handle("t1", "one");
+    const second = turns.handle("t2", "two");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(log).toEqual(["reply t1"]);
+    // LiveKit reports t1's playout only after t2's turn has begun.
+    turns.played("t1", "ans");
+    finishT1();
+    await second;
+    expect(log).toEqual(["reply t1", 'heard t1 "ans"', "reply t2"]);
+  });
+
+  it("stops waiting after the bound when no playout report ever comes", async () => {
+    const { brain, log } = recorder();
+    const turns = new TurnRunner(brain, { playoutDone: () => new Promise<void>(() => {}), playoutWaitMs: 30 });
+    await turns.handle("t1", "one");
+    const started = Date.now();
+    await turns.handle("t2", "two");
+    expect(Date.now() - started).toBeGreaterThanOrEqual(25);
+    expect(log).toEqual(["reply t1", "reply t2"]);
+  });
+
+  it("waits a bounded time by default", () => {
+    expect(PLAYOUT_WAIT_MS).toBe(1000);
+  });
+
+  it("forgets a cut-off report for a turn whose reply failed", async () => {
+    let fail = true;
+    const log: string[] = [];
+    const brain = {
+      ended: false,
+      async reply(text: string, turnId?: string) {
+        if (fail) throw new Error("model down");
+        log.push(`reply ${turnId}`);
+        return text;
+      },
+      heard(turnId: string, played: string) {
+        log.push(`heard ${turnId} "${played}"`);
+      },
+    } satisfies Brain;
+    const turns = new TurnRunner(brain);
+    await turns.handle("t1", "one").catch(() => undefined);
+    turns.played("t1", "x");
+    fail = false;
+    await new Promise((r) => setTimeout(r, 5));
+    await turns.handle("t2", "two");
+    expect(log).toEqual(["reply t2"]);
+    expect(turns.pendingReports).toBe(0);
   });
 });

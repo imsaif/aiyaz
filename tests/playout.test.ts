@@ -59,3 +59,27 @@ describe("PlayoutTracker", () => {
     expect(reports).toEqual([["u2", "Hel"], ["u1", ""]]);
   });
 });
+
+describe("PlayoutTracker.settled", () => {
+  it("resolves once the turn's reply speech is done, after any cut-off report", async () => {
+    const events: string[] = [];
+    const tracker = new PlayoutTracker((turn, played) => events.push(`cut ${turn} ${played}`));
+    tracker.userTurn("u1");
+    const settled = tracker.settled("u1").then(() => events.push("settled u1"));
+    const s = fakeSpeech(true, "We build");
+    tracker.speechCreated({ source: "generate_reply", speechHandle: s.speech });
+    await Promise.resolve();
+    expect(events).toEqual([]);
+    s.finish();
+    await settled;
+    expect(events).toEqual(["cut u1 We build", "settled u1"]);
+  });
+  it("resolves for a reply that played in full", async () => {
+    const tracker = new PlayoutTracker(() => undefined);
+    tracker.userTurn("u1");
+    const s = fakeSpeech(false, "All of it.");
+    tracker.speechCreated({ source: "generate_reply", speechHandle: s.speech });
+    s.finish();
+    await expect(tracker.settled("u1")).resolves.toBeUndefined();
+  });
+});

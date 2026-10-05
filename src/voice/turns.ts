@@ -8,14 +8,33 @@ export type Brain = {
   readonly ended: boolean;
 };
 
+// Longest the next reply waits for LiveKit to report how the previous reply played out.
+// LiveKit starts the next turn's reply before the cut-off reply has finished unwinding.
+export const PLAYOUT_WAIT_MS = 1000;
+
+export type TurnRunnerOptions = {
+  // Resolves when the reply speech for turnId is done (after any cut-off report for it).
+  playoutDone?: (turnId: string) => Promise<void>;
+  playoutWaitMs?: number;
+};
+
 export class TurnRunner {
   private tail: Promise<unknown> = Promise.resolve();
   private readonly answered = new Map<string, Promise<string | null>>();
   private readonly replied = new Set<string>();
   private readonly cutOff = new Map<string, string>();
   private readonly reported = new Set<string>();
+  private lastReplied: string | null = null;
 
-  constructor(private readonly brain: Brain) {}
+  constructor(
+    private readonly brain: Brain,
+    private readonly options: TurnRunnerOptions = {},
+  ) {}
+
+  // Cut-off reports still waiting for their reply to finish (for tests and diagnostics).
+  get pendingReports(): number {
+    return this.cutOff.size;
+  }
 
   handle(turnId: string, heard: string): Promise<string | null> {
     // Asked again for a turn already in hand (interruption, resume, retry): same answer, no new call.
@@ -26,11 +45,18 @@ export class TurnRunner {
     if (!text) return Promise.resolve(null);
     const run = async () => {
       // What the visitor missed of earlier replies goes into the history before the next reply.
+      await this.previousPlayout();
       this.settle();
       if (this.brain.ended) return null;
-      const said = await this.brain.reply(text, turnId);
-      this.replied.add(turnId);
-      return said;
+      try {
+        const said = await this.brain.reply(text, turnId);
+        this.replied.add(turnId);
+        this.lastReplied = turnId;
+        return said;
+      } catch (err) {
+        this.cutOff.delete(turnId);
+        throw err;
+      }
     };
     const answer = this.tail.then(run, run);
     this.tail = answer.catch(() => undefined);
@@ -45,9 +71,21 @@ export class TurnRunner {
     this.reported.add(turnId);
     this.cutOff.set(turnId, played);
     void answer.then(
-      () => this.settle(),
-      () => undefined,
+      (said) => (said === null ? this.cutOff.delete(turnId) : this.settle()),
+      () => this.cutOff.delete(turnId),
     );
+  }
+
+  private async previousPlayout(): Promise<void> {
+    const previous = this.lastReplied;
+    if (previous === null || !this.options.playoutDone) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((r) => (timer = setTimeout(r, this.options.playoutWaitMs ?? PLAYOUT_WAIT_MS)));
+    try {
+      await Promise.race([this.options.playoutDone(previous), bound]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private settle(): void {

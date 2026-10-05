@@ -358,3 +358,52 @@ describe("what the visitor actually heard", () => {
     expect(c.transcript.at(-1)).toEqual({ role: "aiyaz", text: "One two", interrupted: true });
   });
 });
+
+describe("what the visitor heard: ordering and fragments", () => {
+  const lastRequest = (llm: FakeLLM) => JSON.stringify(llm.requests.at(-1)!.messages);
+
+  it("does not attach the cut-off note when a later reply has already been given", async () => {
+    const llm = new FakeLLM([[text("First reply here.")], [text("Second reply here.")], [text("Third.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("one", "t1");
+    await c.reply("two", "t2");
+    c.heard("t1", "First reply");
+    await c.reply("three", "t3");
+    expect(lastRequest(llm)).not.toContain("cut you off");
+    expect(lastRequest(llm)).not.toContain("First reply here.");
+    expect(c.transcript.find((t) => t.interrupted)).toEqual({ role: "aiyaz", text: "First reply", interrupted: true });
+  });
+
+  it("counts a fragment shorter than one whole word as nothing played", async () => {
+    const llm = new FakeLLM([[text("Weekly reports matter. What do you sell?")], [text("Ok.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("one", "t1");
+    c.heard("t1", "We");
+    await c.reply("two", "t2");
+    expect(lastRequest(llm)).toContain("before they heard your last reply");
+    expect(c.transcript.some((t) => t.role === "aiyaz" && t.text.startsWith("We"))).toBe(false);
+  });
+
+  it("keeps a single whole word", async () => {
+    const llm = new FakeLLM([[text("We build AI systems.")], [text("Ok.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("one", "t1");
+    c.heard("t1", "We");
+    expect(c.transcript.at(-1)).toEqual({ role: "aiyaz", text: "We", interrupted: true });
+  });
+
+  it("only remembers the most recent replies", async () => {
+    const llm = new FakeLLM([[text("Alpha one.")], [text("Beta two.")], [text("Gamma three.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("a", "t1");
+    await c.reply("b", "t2");
+    await c.reply("c", "t3");
+    c.heard("t1", "Alpha");
+    expect(c.transcript.some((t) => t.text === "Alpha one.")).toBe(true);
+    expect(c.trackedReplies).toBeLessThanOrEqual(2);
+  });
+});
