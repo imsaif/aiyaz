@@ -17,6 +17,7 @@ import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
 import { hideSpokenTextInLibraryLogs } from "./log-redact.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
+import { SESSION_TURN_HANDLING } from "./session-setup.js";
 import { makeHangUp, startCallTimer } from "./turns.js";
 
 function makeTts(s: Settings) {
@@ -53,8 +54,7 @@ export default defineAgent({
       tts: makeTts(settings),
       llm: new BrainLLM(brain),
       ttsTextTransforms: ["filter_markdown", "filter_emoji"],
-      // Off: a speculative run would call the stateful brain before the visitor finished.
-      turnHandling: { preemptiveGeneration: { enabled: false } },
+      turnHandling: SESSION_TURN_HANDLING,
     });
 
     // Spike measurement: from the visitor's final words to Aiyaz starting to speak.
