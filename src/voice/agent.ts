@@ -114,6 +114,9 @@ export default defineAgent({
   },
 });
 
+// Read the settings once at boot, so a bad value (for example an unknown AIYAZ_TTS) stops the
+// worker before it registers with LiveKit, not at the start of a visitor's call.
+loadSettings();
 const kvNotice = kvMissingNotice();
 if (kvNotice) console.log(kvNotice);
 
