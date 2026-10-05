@@ -84,7 +84,9 @@ export default defineAgent({
     session.on(voice.AgentSessionEventTypes.Error, (ev) => console.error(sessionErrorLine(brain.id, ev)));
 
     const hangUp = makeHangUp({
-      say: (line) => session.say(line).waitForPlayout().then(() => undefined),
+      // allowInterruptions false: the closing line is not cut off by the visitor.
+      say: (line) => session.say(line, { allowInterruptions: false }).waitForPlayout().then(() => undefined),
+      interrupt: () => void session.interrupt({ force: true }),
       shutdown: () => ctx.shutdown("call ended"),
     });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
@@ -96,7 +98,7 @@ export default defineAgent({
       if (ev.newState === "listening" && brain.ended) void hangUp("");
     });
     // The 10-minute cap, even if the visitor never speaks.
-    const stopTimer = startCallTimer(settings.maxSeconds, () => void hangUp(brain.end("time_limit")));
+    const stopTimer = startCallTimer(settings.maxSeconds, () => void hangUp(brain.end("time_limit"), { interrupt: true }));
     ctx.room.on(RoomEvent.ParticipantDisconnected, () => ctx.shutdown("visitor left"));
 
     let logged = false;

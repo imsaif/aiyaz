@@ -293,3 +293,38 @@ describe("TurnRunner and superseded turns", () => {
     expect(brain.calls).toEqual(["earlier"]);
   });
 });
+
+describe("makeHangUp at the time limit", () => {
+  it("cuts off any reply in progress before saying the closing line", async () => {
+    const order: string[] = [];
+    const hangUp = makeHangUp({
+      interrupt: () => order.push("interrupt"),
+      say: async (line) => void order.push(`say ${line}`),
+      shutdown: () => order.push("shutdown"),
+    });
+    await hangUp("Time is up.", { interrupt: true });
+    expect(order).toEqual(["interrupt", "say Time is up.", "shutdown"]);
+  });
+  it("lets a finished summary end without an interrupt", async () => {
+    const order: string[] = [];
+    const hangUp = makeHangUp({
+      interrupt: () => order.push("interrupt"),
+      say: async (line) => void order.push(`say ${line}`),
+      shutdown: () => order.push("shutdown"),
+    });
+    await hangUp("");
+    expect(order).toEqual(["shutdown"]);
+  });
+  it("still shuts down when the interrupt throws", async () => {
+    const order: string[] = [];
+    const hangUp = makeHangUp({
+      interrupt: () => {
+        throw new Error("no session");
+      },
+      say: async (line) => void order.push(`say ${line}`),
+      shutdown: () => order.push("shutdown"),
+    });
+    await hangUp("Time is up.", { interrupt: true });
+    expect(order).toEqual(["say Time is up.", "shutdown"]);
+  });
+});

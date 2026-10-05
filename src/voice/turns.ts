@@ -120,12 +120,21 @@ export const HANGUP_PLAYOUT_CAP_MS = 15_000;
 
 // Say the closing line (if any), then shut down exactly once. Playout that never settles or a
 // say that throws must not keep the call open or skip the shutdown callback.
-export function makeHangUp(io: { say: (line: string) => Promise<void>; shutdown: () => void }) {
+// opts.interrupt (the time limit): cut off any reply being spoken or queued first, so the
+// closing line plays at once instead of after it.
+export function makeHangUp(io: { say: (line: string) => Promise<void>; shutdown: () => void; interrupt?: () => void }) {
   let closing = false;
-  return async (line: string): Promise<void> => {
+  return async (line: string, opts: { interrupt?: boolean } = {}): Promise<void> => {
     if (closing) return;
     closing = true;
     let cap: ReturnType<typeof setTimeout> | undefined;
+    if (opts.interrupt) {
+      try {
+        io.interrupt?.();
+      } catch (err) {
+        console.error(`[call] interrupt failed: ${err instanceof Error ? err.name : "unknown"}`);
+      }
+    }
     try {
       if (line) {
         const timeout = new Promise<void>((r) => (cap = setTimeout(r, HANGUP_PLAYOUT_CAP_MS)));
