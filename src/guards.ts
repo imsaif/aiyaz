@@ -45,7 +45,8 @@ export function moneyAmounts(text: string): string[] {
 }
 
 // True when every money amount in the text is the sprint price, in its own currency.
-export function onlySprintPrice(text: string, price: { amount: number; currency: "AED" }): boolean {
+// Only AED amounts are recognised so far; a USD price makes any amount fail until a later task adds USD.
+export function onlySprintPrice(text: string, price: { amount: number; currency: "AED" | "USD" }): boolean {
   if (WORDED_AMOUNT.test(text) && !/\d/.test(text.match(WORDED_AMOUNT)?.[0] ?? "")) {
     // Allow only the price itself written as "25 ألف درهم"; any amount spelled out in words fails.
     const before = text.slice(0, text.search(WORDED_AMOUNT));

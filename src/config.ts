@@ -1,12 +1,19 @@
 // Every setting lives here. Anything that might change later is an env var.
 
-export type SprintPrice = { amount: number; currency: "AED" };
+export type Currency = "AED" | "USD";
+export type SprintPrice = { amount: number; currency: Currency };
+// Which price and pack a visitor gets. Must match priceFor() in the site's price-core.js.
+export type PriceKey = "AE" | "other" | "unknown";
 
 export type Settings = {
   agentName: string;
   sprintPrice: SprintPrice;
   promptVersion: string;
   knowledgePack: string | null;
+  prices: Record<PriceKey, SprintPrice>;
+  packs: Record<PriceKey, string | null>;
+  // Two-letter country of the visitor, or null when unknown.
+  country: string | null;
   arabicEnabled: boolean;
   arabicJudgeProvider: "anthropic" | "hf";
   arabicJudgeModel: string;
@@ -35,14 +42,54 @@ const num = (key: string, fallback: number) => {
   return n;
 };
 
+// Decided 2026-10-05: USD 6,000 for every known country outside the UAE; AED 25,000 in the
+// UAE and when the country cannot be read (the UAE is the current test market).
+const PRICES: Record<PriceKey, SprintPrice> = {
+  AE: { amount: 25000, currency: "AED" },
+  other: { amount: 6000, currency: "USD" },
+  unknown: { amount: 25000, currency: "AED" },
+};
+
+// AIYAZ_KNOWLEDGE unset: pack by country. "none": no pack. Any other value: that pack for everyone.
+function packsFromEnv(): Record<PriceKey, string | null> {
+  const forced = process.env.AIYAZ_KNOWLEDGE;
+  if (forced === "none") return { AE: null, other: null, unknown: null };
+  if (forced) return { AE: forced, other: forced, unknown: forced };
+  return { AE: "uae.v1", other: "general.v1", unknown: "uae.v1" };
+}
+
+export function normCountry(country: string | null | undefined): string | null {
+  const c = (country ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) ? c : null;
+}
+
+export function priceKey(country: string | null | undefined): PriceKey {
+  const c = normCountry(country);
+  if (!c) return "unknown";
+  return c === "AE" ? "AE" : "other";
+}
+
+// The settings for one visitor: their price and their market pack.
+export function forCountry(settings: Settings, country: string | null | undefined): Settings {
+  const key = priceKey(country);
+  return {
+    ...settings,
+    country: normCountry(country),
+    sprintPrice: settings.prices[key],
+    knowledgePack: settings.packs[key],
+  };
+}
+
 export function loadSettings(): Settings {
   return {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
-    // Decided 2026-10-01: the sprint is priced in AED for UAE companies.
-    sprintPrice: { amount: 25000, currency: "AED" },
     promptVersion: env("AIYAZ_PROMPT_VERSION", "v2"),
-    // "none" turns the market briefing pack off.
-    knowledgePack: env("AIYAZ_KNOWLEDGE", "uae.v1") === "none" ? null : env("AIYAZ_KNOWLEDGE", "uae.v1"),
+    // The unknown visitor until forCountry() is applied.
+    sprintPrice: PRICES.unknown,
+    knowledgePack: packsFromEnv().unknown,
+    prices: { ...PRICES },
+    packs: packsFromEnv(),
+    country: null,
     // Off until the Gulf Arabic review passes (spec section 4).
     arabicEnabled: env("AIYAZ_ARABIC", "false") === "true",
     // Spike 2026-10-01: no HF token yet, so the judge runs on Claude (not open source).
