@@ -212,6 +212,13 @@ export class Conversation {
     return said;
   }
 
+  // Ends the call from outside the model loop, for example the worker's 10-minute timer.
+  // Returns the fixed wrap-up line to speak, or "" if the call had already ended.
+  end(reason: Exclude<EndReason, "agent_ended">): string {
+    if (this.ended) return "";
+    return this.finish(reason);
+  }
+
   private finish(reason: Exclude<EndReason, "agent_ended">, spoken: string[] = []): string {
     this.ended = true;
     this.endReason = reason;

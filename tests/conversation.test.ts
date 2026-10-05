@@ -155,6 +155,18 @@ describe("a turn", () => {
 });
 
 describe("limits", () => {
+  it("can be ended from outside with the fixed wrap-up line, without a model call", () => {
+    const llm = new FakeLLM([]);
+    const c = make(llm);
+    c.start();
+    expect(c.end("time_limit")).toBe(WRAP_UP.time_limit);
+    expect(c.ended).toBe(true);
+    expect(c.endReason).toBe("time_limit");
+    expect(c.transcript.at(-1)).toEqual({ role: "aiyaz", text: WRAP_UP.time_limit });
+    expect(c.end("time_limit")).toBe("");
+    expect(llm.requests).toHaveLength(0);
+  });
+
   it("wraps up at the time limit without calling the model", async () => {
     let t = 0;
     const llm = new FakeLLM([]);
