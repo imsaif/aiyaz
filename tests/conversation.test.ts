@@ -437,12 +437,12 @@ describe("what the visitor heard: ordering and fragments", () => {
 });
 
 describe("reply length", () => {
-  it("caps each model call at 300 output tokens by default", async () => {
+  it("caps each model call at 400 output tokens by default", async () => {
     const llm = new FakeLLM([[text("Who uses it?")]]);
     const c = make(llm);
     c.start();
     await c.reply("We make an app.");
-    expect(llm.requests[0]!.max_tokens).toBe(300);
+    expect(llm.requests[0]!.max_tokens).toBe(400);
   });
   it("still speaks the fixed wrap-up line at the time limit", async () => {
     let now = 0;
@@ -451,5 +451,51 @@ describe("reply length", () => {
     c.start();
     now = (settings.maxSeconds + 1) * 1000;
     expect(await c.reply("hello")).toBe(WRAP_UP.time_limit);
+  });
+});
+
+describe("a reply cut off at max_tokens", () => {
+  const assistantJson = (c: Conversation) => JSON.stringify((c as unknown as { messages: unknown[] }).messages);
+
+  it("speaks and stores only the complete sentences", async () => {
+    const llm = new FakeLLM([{ blocks: [text("We help teams ship AI. The sprint covers two we")], stop: "max_tokens" }]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("What do you do?")).toBe("We help teams ship AI.");
+    expect(c.transcript.at(-1)).toEqual({ role: "aiyaz", text: "We help teams ship AI." });
+    expect(assistantJson(c)).not.toContain("covers two we");
+  });
+
+  it("does not apply a cut-off record_notes call, and keeps the history valid", async () => {
+    const llm = new FakeLLM([
+      { blocks: [text("Who uses it day to day?"), tool("record_notes", { product: "an invoic" })], stop: "max_tokens" },
+      [text("Ok.")],
+    ]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("We make an invoicing app.")).toBe("Who uses it day to day?");
+    expect(c.notes.product).toBeNull();
+    expect(llm.requests).toHaveLength(1);
+    await c.reply("Accountants.");
+    expect(JSON.stringify(llm.requests[1]!.messages)).not.toContain("tool_use");
+  });
+
+  it("does not treat a cut-off end_conversation as called", async () => {
+    const llm = new FakeLLM([
+      { blocks: [text("So you sell invoicing software. The sprint starts there."), tool("end_conversation", {})], stop: "max_tokens" },
+    ]);
+    const c = make(llm);
+    c.start();
+    await c.reply("That is all.");
+    expect(c.ended).toBe(false);
+  });
+
+  it("falls back to a short question when nothing complete is left", async () => {
+    const llm = new FakeLLM([{ blocks: [text("We help teams with")], stop: "max_tokens" }]);
+    const c = make(llm);
+    c.start();
+    const said = await c.reply("What do you do?");
+    expect(said).toBe("Could you tell me a little more about that?");
+    expect(assistantJson(c)).not.toContain("We help teams with");
   });
 });

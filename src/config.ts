@@ -133,9 +133,10 @@ export function loadSettings(): Settings {
     maxInputChars: num("AIYAZ_MAX_INPUT_CHARS", 4000),
     maxToolRounds: num("AIYAZ_MAX_TOOL_ROUNDS", 4),
     requestTimeoutMs: num("AIYAZ_REQUEST_TIMEOUT_MS", 30_000),
-    // Spoken replies are two or three short sentences (about 40 tokens); 300 leaves room for a
-    // record_notes call (up to about 90 tokens in call 2) and the closing summary.
-    maxOutputTokens: num("AIYAZ_MAX_OUTPUT_TOKENS", 300),
+    // Sized for the longest turn, the closing summary: five short sentences (about 100 words,
+    // 135 tokens) + record_notes (up to about 120) + end_conversation (about 30) is about 285;
+    // 400 leaves about 40% headroom. Normal replies stop on their own at 40 to 90 tokens.
+    maxOutputTokens: num("AIYAZ_MAX_OUTPUT_TOKENS", 400),
     forbiddenNames: ["Imran"],
     traceFile: env("AIYAZ_TRACE_FILE", "traces.jsonl"),
     summaryTo: env("AIYAZ_SUMMARY_TO", ""),

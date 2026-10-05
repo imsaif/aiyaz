@@ -57,6 +57,19 @@ const TOOL_ROUND_FALLBACK = "Could you tell me a little more about that?";
 const CUT_OFF_NOTE = "(The prospect cut you off. They heard only the part of your last reply shown above.)";
 const CUT_OFF_SILENT_NOTE = "(The prospect cut you off before they heard your last reply.)";
 
+// A response cut off at max_tokens: the last block is incomplete. A cut tool call is dropped
+// (never applied, never kept in the history) and cut text goes back to its last sentence end.
+function withoutCutOffEnd(content: Anthropic.ContentBlock[]): Anthropic.ContentBlock[] {
+  const last = content.at(-1);
+  if (!last) return content;
+  const kept = content.slice(0, -1);
+  if (last.type === "text") {
+    const end = [...last.text.matchAll(/[.?!](?=\s|$)/g)].at(-1);
+    if (end?.index !== undefined) kept.push({ ...last, text: last.text.slice(0, end.index + 1) });
+  }
+  return kept.filter((b) => b.type !== "text" || b.text.trim());
+}
+
 // What one reply added, so it can be trimmed to what the visitor heard.
 type ReplyRecord = { assistant: Anthropic.MessageParam[]; turn: Turn | undefined; settled: boolean };
 // LiveKit reports a cut-off within a turn or two, so older replies are not kept.
@@ -225,7 +238,8 @@ export class Conversation {
 
       const callCost = costUsd(message.model, message.usage);
       this.costUsd += callCost;
-      const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+      const content = message.stop_reason === "max_tokens" ? withoutCutOffEnd(message.content) : message.content;
+      const toolUses = content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       this.trace({
         model: message.model,
         latencyMs: this.now() - t0,
@@ -237,8 +251,14 @@ export class Conversation {
         fallbackUsed,
       });
 
-      this.messages.push({ role: "assistant", content: message.content });
-      for (const block of message.content) {
+      if (content.length === 0) {
+        // Nothing complete was left: keep the history valid and ask a short question instead.
+        this.messages.push({ role: "assistant", content: TOOL_ROUND_FALLBACK });
+        spoken.push(TOOL_ROUND_FALLBACK);
+        break;
+      }
+      this.messages.push({ role: "assistant", content });
+      for (const block of content) {
         if (block.type === "text" && block.text.trim()) {
           // The model sometimes echoes a tool acknowledgement ("Saved.") before speaking.
           const clean = block.text
@@ -268,7 +288,7 @@ export class Conversation {
       // Voice latency: when this response already holds the reply and only saved notes,
       // speak now and send the tool results with the next user message.
       // A bare "Got it." would leave the visitor in silence, so it still gets a second call.
-      const saidThisRound = message.content
+      const saidThisRound = content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text.trim())
         .join(" ");
