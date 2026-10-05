@@ -315,6 +315,16 @@ describe("makeHangUp at the time limit", () => {
     await hangUp("");
     expect(order).toEqual(["shutdown"]);
   });
+  it("does not interrupt when there is no closing line (the call had already ended)", async () => {
+    const order: string[] = [];
+    const hangUp = makeHangUp({
+      interrupt: () => order.push("interrupt"),
+      say: async (line) => void order.push(`say ${line}`),
+      shutdown: () => order.push("shutdown"),
+    });
+    await hangUp("", { interrupt: true });
+    expect(order).toEqual(["shutdown"]);
+  });
   it("still shuts down when the interrupt throws", async () => {
     const order: string[] = [];
     const hangUp = makeHangUp({

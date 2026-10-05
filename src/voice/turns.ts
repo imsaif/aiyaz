@@ -129,7 +129,9 @@ export function makeHangUp(io: { say: (line: string) => Promise<void>; shutdown:
     if (closing) return;
     closing = true;
     let cap: ReturnType<typeof setTimeout> | undefined;
-    if (opts.interrupt) {
+    // Only to make room for a closing line: with none, the call had already ended (for example
+    // its summary is still playing) and nothing is cut off.
+    if (opts.interrupt && line) {
       try {
         io.interrupt?.();
       } catch (err) {
