@@ -68,3 +68,8 @@ export function kvFromEnv(env: NodeJS.ProcessEnv = process.env): KV | null {
   const token = env.KV_REST_API_TOKEN;
   return url && token ? new UpstashKV(url, token) : null;
 }
+
+// One boot line when the worker has no KV: names what is off, never a value from the env.
+export function kvMissingNotice(env: NodeJS.ProcessEnv = process.env): string | null {
+  return kvFromEnv(env) ? null : "[worker] KV not configured: lead briefs and spend settle disabled";
+}

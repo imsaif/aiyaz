@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryKV, UpstashKV, kvFromEnv } from "../src/kv.js";
+import { MemoryKV, UpstashKV, kvFromEnv, kvMissingNotice } from "../src/kv.js";
 
 describe("MemoryKV", () => {
   it("gets, sets with expiry and adds floats", async () => {
@@ -36,5 +36,15 @@ describe("UpstashKV", () => {
   it("is null when the env has no Upstash settings", () => {
     expect(kvFromEnv({})).toBeNull();
     expect(kvFromEnv({ KV_REST_API_URL: "https://kv.example", KV_REST_API_TOKEN: "t" })).toBeInstanceOf(UpstashKV);
+  });
+});
+
+describe("worker boot notice", () => {
+  it("names what is off when KV is not configured, and nothing secret", () => {
+    const line = "[worker] KV not configured: lead briefs and spend settle disabled";
+    expect(kvMissingNotice({})).toBe(line);
+    expect(kvMissingNotice({ KV_REST_API_URL: "https://kv.example" })).toBe(line);
+    expect(kvMissingNotice({ KV_REST_API_TOKEN: "secret-token" })).toBe(line);
+    expect(kvMissingNotice({ KV_REST_API_URL: "https://kv.example", KV_REST_API_TOKEN: "t" })).toBeNull();
   });
 });

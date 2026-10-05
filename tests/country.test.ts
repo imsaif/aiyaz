@@ -47,3 +47,28 @@ describe("country", () => {
     expect(base.sprintPrice.currency).toBe("AED");
   });
 });
+
+describe("voice provider setting", () => {
+  const withTts = (value: string | undefined, fn: () => void) => {
+    const saved = process.env.AIYAZ_TTS;
+    try {
+      if (value === undefined) delete process.env.AIYAZ_TTS;
+      else process.env.AIYAZ_TTS = value;
+      fn();
+    } finally {
+      if (saved === undefined) delete process.env.AIYAZ_TTS;
+      else process.env.AIYAZ_TTS = saved;
+    }
+  };
+  it("accepts elevenlabs and cartesia, and defaults to elevenlabs when unset or empty", () => {
+    withTts("cartesia", () => expect(loadSettings().ttsProvider).toBe("cartesia"));
+    withTts("elevenlabs", () => expect(loadSettings().ttsProvider).toBe("elevenlabs"));
+    withTts(undefined, () => expect(loadSettings().ttsProvider).toBe("elevenlabs"));
+    withTts("", () => expect(loadSettings().ttsProvider).toBe("elevenlabs"));
+  });
+  it("refuses an unknown provider instead of quietly using elevenlabs", () => {
+    for (const v of ["Cartesia", "eleven", "google"]) {
+      withTts(v, () => expect(() => loadSettings(), v).toThrow(/AIYAZ_TTS/));
+    }
+  });
+});

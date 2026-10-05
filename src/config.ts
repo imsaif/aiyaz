@@ -87,6 +87,13 @@ export function forCountry(settings: Settings, country: string | null | undefine
   };
 }
 
+// Unset or empty means elevenlabs. A typo must stop the worker, not quietly pick the other voice.
+function ttsFromEnv(): Settings["ttsProvider"] {
+  const raw = process.env.AIYAZ_TTS || "elevenlabs";
+  if (raw === "elevenlabs" || raw === "cartesia") return raw;
+  throw new Error(`AIYAZ_TTS must be "elevenlabs" or "cartesia", got "${raw}"`);
+}
+
 export function loadSettings(): Settings {
   return {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
@@ -130,7 +137,7 @@ export function loadSettings(): Settings {
     transcriptDays: num("AIYAZ_TRANSCRIPT_DAYS", 30),
     voiceUsdPerMinute: num("AIYAZ_VOICE_USD_PER_MIN", 0.05),
     // Chosen by ear in the voice audition; empty voice id means the provider's default voice.
-    ttsProvider: env("AIYAZ_TTS", "elevenlabs") === "cartesia" ? "cartesia" : "elevenlabs",
+    ttsProvider: ttsFromEnv(),
     ttsVoiceId: env("AIYAZ_TTS_VOICE_ID", ""),
   };
 }

@@ -11,7 +11,7 @@ import { loadBrief } from "../briefs.js";
 import { buildCallLog, sendCallEmails, storeCall } from "../calllog.js";
 import { forCountry, loadSettings, type Settings } from "../config.js";
 import { Conversation } from "../conversation.js";
-import { kvFromEnv } from "../kv.js";
+import { kvFromEnv, kvMissingNotice } from "../kv.js";
 import { AnthropicLLM } from "../llm.js";
 import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
@@ -113,5 +113,8 @@ export default defineAgent({
     session.say(brain.start(), { allowInterruptions: false });
   },
 });
+
+const kvNotice = kvMissingNotice();
+if (kvNotice) console.log(kvNotice);
 
 cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: AGENT_NAME }));
