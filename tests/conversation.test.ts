@@ -38,6 +38,49 @@ describe("a turn", () => {
     expect(c.notes.symptoms).toEqual(["bad answers"]);
   });
 
+  it("speaks a question that came with record_notes without a second model call", async () => {
+    const llm = new FakeLLM([
+      [text("Got it. Who uses it day to day?"), tool("record_notes", { product: "an invoicing app" })],
+    ]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("We make an invoicing app.")).toBe("Got it. Who uses it day to day?");
+    expect(llm.requests).toHaveLength(1);
+    expect(c.notes.product).toBe("an invoicing app");
+  });
+
+  it("carries deferred tool results into the next user message", async () => {
+    const first = tool("record_notes", { product: "a" });
+    const llm = new FakeLLM([[text("Who uses it?"), first], [text("Thanks.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("hello");
+    await c.reply("small teams");
+    const msgs = llm.requests[1]!.messages;
+    const last = msgs[msgs.length - 1]!;
+    expect(last.role).toBe("user");
+    const blocks = last.content as Array<{ type: string; tool_use_id?: string; text?: string }>;
+    expect(blocks.map((b) => b.type)).toEqual(["tool_result", "text"]);
+    expect(blocks[0]!.tool_use_id).toBe((first as unknown as { id: string }).id);
+    expect(blocks[1]!.text).toBe("small teams");
+  });
+
+  it("still makes a second call when record_notes came with no text", async () => {
+    const llm = new FakeLLM([[tool("record_notes", { product: "a" })], [text("Who uses it?")]]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("hi")).toBe("Who uses it?");
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it("never defers end_conversation", async () => {
+    const llm = new FakeLLM([[text("Shall we stop?"), tool("end_conversation", { reason: "done" })]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("bye");
+    expect(c.ended).toBe(true);
+  });
+
   it("never speaks the note-saving acknowledgement", async () => {
     const llm = new FakeLLM([
       [text("Is it live with users yet?"), tool("record_notes", { product: "a chatbot" })],

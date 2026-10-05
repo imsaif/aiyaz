@@ -76,6 +76,8 @@ export class Conversation {
   private readonly startedAt: number;
   private readonly messages: Anthropic.MessageParam[] = [];
   private prospectTurns = 0;
+  // Tool results from a turn that was spoken without a second model call.
+  private pendingResults: Anthropic.ToolResultBlockParam[] = [];
 
   constructor(deps: ConversationDeps) {
     this.settings = deps.settings;
@@ -108,7 +110,13 @@ export class Conversation {
     if (this.now() - this.startedAt > this.settings.maxSeconds * 1000) return this.finish("time_limit");
     if (this.prospectTurns > this.settings.maxTurns) return this.finish("turn_limit");
 
-    this.messages.push({ role: "user", content: text });
+    // Tool results deferred from the previous turn must lead the next user message.
+    this.messages.push(
+      this.pendingResults.length
+        ? { role: "user", content: [...this.pendingResults, { type: "text", text }] }
+        : { role: "user", content: text },
+    );
+    this.pendingResults = [];
     const spoken: string[] = [];
 
     for (let round = 0; round < this.settings.maxToolRounds; round++) {
@@ -170,6 +178,17 @@ export class Conversation {
         }
         return { type: "tool_result", tool_use_id: tool.id, content: `Unknown tool ${tool.name}`, is_error: true };
       });
+      // Voice latency: when this response already asks the next question and only saved
+      // notes, speak now and send the tool results with the next user message.
+      // A bare "Got it." would leave the visitor in silence, so it still gets a second call.
+      const saidThisRound = message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text.trim())
+        .join(" ");
+      if (saidThisRound.includes("?") && toolUses.every((t) => t.name === "record_notes")) {
+        this.pendingResults = results;
+        break;
+      }
       // All results go back in a single user message.
       this.messages.push({ role: "user", content: results });
 
