@@ -57,11 +57,12 @@ export class TurnRunner {
       }
       if (this.brain.ended) return null;
       const words = `${this.carried} ${text}`.trim();
-      this.carried = "";
       try {
         // Once started, a reply runs to the end even if LiveKit drops it (it is never spoken,
         // and the played-only trim removes it from the history).
         const said = await this.brain.reply(words, turnId);
+        // Cleared only once the brain has them, so a failed reply does not lose them.
+        this.carried = "";
         this.replied.add(turnId);
         this.lastReplied = turnId;
         return said;

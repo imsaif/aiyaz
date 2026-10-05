@@ -328,3 +328,32 @@ describe("makeHangUp at the time limit", () => {
     expect(order).toEqual(["say Time is up.", "shutdown"]);
   });
 });
+
+describe("TurnRunner keeps carried words through a failed reply", () => {
+  it("passes them on to the next turn when the reply that held them throws", async () => {
+    const calls: string[] = [];
+    let failNext = false;
+    const brain = {
+      ended: false,
+      async reply(text: string) {
+        calls.push(text);
+        await new Promise((r) => setTimeout(r, 10));
+        if (failNext) {
+          failNext = false;
+          throw new Error("model down");
+        }
+        return text;
+      },
+    } satisfies Brain;
+    const turns = new TurnRunner(brain);
+    const busy = turns.handle("t0", "earlier");
+    const first = new AbortController();
+    const dropped = turns.handle("t1", "we sell shoes", first.signal);
+    first.abort();
+    await Promise.all([busy, dropped]);
+    failNext = true;
+    await turns.handle("t2", "to gyms").catch(() => undefined);
+    await turns.handle("t3", "in Dubai");
+    expect(calls).toEqual(["earlier", "we sell shoes to gyms", "we sell shoes in Dubai"]);
+  });
+});
