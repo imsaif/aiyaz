@@ -67,15 +67,32 @@ describe("a turn", () => {
     expect(blocks[1]!.text).toBe("small teams");
   });
 
-  it("speaks a full sentence that came with record_notes without a second model call, even with no question", async () => {
+  it("makes the second call when a closing summary with no question came with record_notes", async () => {
     const llm = new FakeLLM([
-      [text("That sounds like a busy market for small shops."), tool("record_notes", { product: "an invoicing app" })],
+      [text("So you sell invoicing software to small shops and the answers drift. The sprint would start there."), tool("record_notes", { product: "an invoicing app" })],
+      [text("Thanks for your time."), tool("end_conversation", { reason: "done" })],
     ]);
     const c = make(llm);
     c.start();
-    expect(await c.reply("We make an invoicing app.")).toBe("That sounds like a busy market for small shops.");
+    await c.reply("That is all.");
+    expect(llm.requests).toHaveLength(2);
+    expect(c.ended).toBe(true);
+  });
+
+  it("ends the call in one model call when the summary, notes and end_conversation come together", async () => {
+    const llm = new FakeLLM([
+      [
+        text("So you sell invoicing software to small shops. The sprint would start with the answers."),
+        tool("record_notes", { product: "an invoicing app" }),
+        tool("end_conversation", { reason: "done" }),
+      ],
+    ]);
+    const c = make(llm);
+    c.start();
+    await c.reply("That is all.");
     expect(llm.requests).toHaveLength(1);
-    expect(c.notes.product).toBe("an invoicing app");
+    expect(c.ended).toBe(true);
+    expect(c.endReason).toBe("agent_ended");
   });
 
   it("still makes a second call when record_notes came with no text", async () => {

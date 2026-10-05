@@ -272,9 +272,9 @@ export class Conversation {
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text.trim())
         .join(" ");
-      // A question, or a full sentence of at least six words, is a reply on its own.
-      const isReply = saidThisRound.includes("?") || saidThisRound.split(/\s+/).filter(Boolean).length >= 6;
-      if (isReply && toolUses.every((t) => t.name === "record_notes")) {
+      // Only a question counts: a closing summary has no question and must get the second
+      // call, where end_conversation follows the notes result.
+      if (saidThisRound.includes("?") && toolUses.every((t) => t.name === "record_notes")) {
         this.pendingResults = results;
         break;
       }

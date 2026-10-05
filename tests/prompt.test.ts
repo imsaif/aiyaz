@@ -138,6 +138,9 @@ describe("v3 prompt by country", () => {
     expect(p.text).toContain("Keep every spoken reply to two or three short sentences");
     expect(p.text).toContain("The closing summary may be up to five short sentences.");
   });
+  it("asks for end_conversation in the same message as the closing summary", () => {
+    expect(buildSystemPrompt(base, null).text).toContain("Call `end_conversation` in the same message as the closing summary.");
+  });
   it("tells Aiyaz to speak first and never send record_notes on its own", () => {
     const p = buildSystemPrompt(base, null);
     expect(p.text).toContain("Never send `record_notes` without a spoken reply.");

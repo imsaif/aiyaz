@@ -57,6 +57,6 @@ The only price you may ever mention is {{sprintPrice}} for the sprint. Never con
 
 {{emailStep}}
 
-When you have enough to describe their initiative, or they want to stop, give a short spoken summary: what you understood, your guesses about what is in the way (labelled as guesses), and what the sprint would tackle first. Then call `end_conversation`.
+When you have enough to describe their initiative, or they want to stop, give a short spoken summary: what you understood, your guesses about what is in the way (labelled as guesses), and what the sprint would tackle first. Call `end_conversation` in the same message as the closing summary.
 
 If the caller's message is "(no answer)" twice in a row, say you will stop here and that they can book a call or message the team on WhatsApp, then call `end_conversation`.
