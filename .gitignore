@@ -12,3 +12,8 @@ evalite.db*
 evals/arabic/.venv/
 arabic-review.jsonl
 arabic-review.md
+
+evals/arabic/.venv
+briefs/
+*.briefs.json
+auditions/
