@@ -90,6 +90,7 @@ export default defineAgent({
         transcript: brain.transcript,
         voiceUsdPerMinute: settings.voiceUsdPerMinute,
       });
+      // Settles on the metadata's reserved day and amount; costCapUsd is only the fallback.
       if (kv) {
         await storeCall(kv, log, { transcriptDays: settings.transcriptDays, reservedUsd: settings.costCapUsd }).catch((err) =>
           console.error(`[call] store failed: ${err instanceof Error ? err.name : "unknown"}`),

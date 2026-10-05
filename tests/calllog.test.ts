@@ -14,6 +14,7 @@ import {
 } from "../src/calllog.js";
 import { MemoryKV } from "../src/kv.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
+import { parseCallMeta } from "../src/voice/meta.js";
 
 const brief = {
   company: "Acme",
@@ -34,11 +35,12 @@ const transcript = [
   { role: "aiyaz" as const, text: "My guess is the assistant reads dates from the wrong field." },
 ];
 const START = Date.parse("2026-10-05T10:00:00Z");
+const NO_META = { country: null, slug: null, email: null, day: null, reservedUsd: null };
 const log = buildCallLog({
   id: "call-1",
   startedAt: START,
   endedAt: START + 300_000,
-  meta: { country: "AE", slug: "acme-test", email: "cto@acme.example" },
+  meta: { country: "AE", slug: "acme-test", email: "cto@acme.example", day: null, reservedUsd: null },
   company: "Acme",
   endReason: "agent_ended",
   claudeUsd: 0.12,
@@ -65,9 +67,9 @@ describe("call log", () => {
   it("uses the form email first, else the one Aiyaz collected on a lead call", () => {
     const collected = applyNotesUpdate(notes, { visitor_email: "Lead@Acme.example" });
     const base = { id: "c2", startedAt: START, endedAt: START + 60_000, company: "Acme", endReason: "x", claudeUsd: 0, transcript, voiceUsdPerMinute: 0.05 };
-    expect(buildCallLog({ ...base, meta: { country: null, slug: null, email: "form@acme.example" }, notes: collected }).email).toBe("form@acme.example");
-    expect(buildCallLog({ ...base, meta: { country: null, slug: null, email: null }, notes: collected }).email).toBe("lead@acme.example");
-    expect(buildCallLog({ ...base, meta: { country: null, slug: null, email: null }, notes }).email).toBeNull();
+    expect(buildCallLog({ ...base, meta: { ...NO_META, email: "form@acme.example" }, notes: collected }).email).toBe("form@acme.example");
+    expect(buildCallLog({ ...base, meta: NO_META, notes: collected }).email).toBe("lead@acme.example");
+    expect(buildCallLog({ ...base, meta: NO_META, notes }).email).toBeNull();
   });
   it("records who, where, how long and what it cost, voice included", () => {
     expect(log.durationSec).toBe(300);
@@ -83,6 +85,31 @@ describe("call log", () => {
     expect(JSON.parse((await kv.get(CALL_KEY("call-1")))!).transcript).toHaveLength(3);
     expect(kv.ttl.get(CALL_KEY("call-1"))).toBe(2_592_000);
     expect(Number(await kv.get(SPEND_KEY("2026-10-05")))).toBeCloseTo(0.37);
+  });
+  // Minted at 23:59 UTC, the worker joined after midnight and the call ended at 00:05.
+  const lateLog = (meta: string) =>
+    buildCallLog({
+      id: "late", startedAt: Date.parse("2026-10-06T00:00:10Z"), endedAt: Date.parse("2026-10-06T00:05:10Z"),
+      meta: parseCallMeta(meta), company: null, endReason: "agent_ended", claudeUsd: 0.1, notes, transcript, voiceUsdPerMinute: 0.05,
+    });
+  it("settles on the day the token function reserved, even after midnight", async () => {
+    const kv = new MemoryKV();
+    await kv.set(SPEND_KEY("2026-10-05"), "1");
+    await storeCall(kv, lateLog('{"day":"2026-10-05","reservedUsd":1}'), { transcriptDays: 30, reservedUsd: 1 });
+    expect(Number(await kv.get(SPEND_KEY("2026-10-05")))).toBeCloseTo(0.35);
+    expect(await kv.get(SPEND_KEY("2026-10-06"))).toBeNull();
+  });
+  it("settles the amount the token function reserved, not the worker's own setting", async () => {
+    const kv = new MemoryKV();
+    await kv.set(SPEND_KEY("2026-10-05"), "0.75");
+    await storeCall(kv, lateLog('{"day":"2026-10-05","reservedUsd":0.75}'), { transcriptDays: 30, reservedUsd: 1 });
+    expect(Number(await kv.get(SPEND_KEY("2026-10-05")))).toBeCloseTo(0.35);
+  });
+  it("falls back to the start day and the worker's setting when the metadata is malformed", async () => {
+    const kv = new MemoryKV();
+    await storeCall(kv, lateLog('{"day":"05/10/2026","reservedUsd":"0.75"}'), { transcriptDays: 30, reservedUsd: 1 });
+    expect(Number(await kv.get(SPEND_KEY("2026-10-06")))).toBeCloseTo(0.35 - 1);
+    expect(await kv.get(SPEND_KEY("2026-10-05"))).toBeNull();
   });
 });
 
@@ -158,7 +185,7 @@ describe("visitor email", () => {
 
 describe("visitor name and role", () => {
   const named = buildCallLog({
-    id: "c9", startedAt: START, endedAt: START + 60_000, meta: { country: "AE", slug: null, email: "cto@acme.example" }, company: "Acme",
+    id: "c9", startedAt: START, endedAt: START + 60_000, meta: { ...NO_META, country: "AE", email: "cto@acme.example" }, company: "Acme",
     endReason: "x", claudeUsd: 0, transcript, voiceUsdPerMinute: 0.05,
     notes: applyNotesUpdate(notes, { visitor_name: "Sam Lee", visitor_role: "CTO" }),
   });

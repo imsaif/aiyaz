@@ -82,15 +82,28 @@ describe("briefs", () => {
 });
 
 describe("call metadata", () => {
-  it("reads country, slug and email from the token metadata", () => {
-    expect(parseCallMeta('{"country":"in","slug":"acme-7k2q","email":" A@B.co "}')).toEqual({
+  it("reads country, slug, email and the reservation from the token metadata", () => {
+    expect(
+      parseCallMeta('{"country":"in","slug":"acme-7k2q","email":" A@B.co ","day":"2026-10-05","reservedUsd":0.75}'),
+    ).toEqual({
       country: "IN",
       slug: "acme-7k2q",
       email: "a@b.co",
+      day: "2026-10-05",
+      reservedUsd: 0.75,
     });
+    expect(parseCallMeta('{"reservedUsd":0}').reservedUsd).toBe(0);
+  });
+  it("drops a malformed reservation day or amount", () => {
+    for (const day of ['"2026-1-5"', '"2026-10-05T00:00"', '"yesterday"', "20261005", "null"]) {
+      expect(parseCallMeta(`{"day":${day}}`).day, day).toBeNull();
+    }
+    for (const amount of ['"1"', "-1", "1e999", "true", "null", "[1]"]) {
+      expect(parseCallMeta(`{"reservedUsd":${amount}}`).reservedUsd, amount).toBeNull();
+    }
   });
   it("treats anything missing or malformed as unknown", () => {
-    const none = { country: null, slug: null, email: null };
+    const none = { country: null, slug: null, email: null, day: null, reservedUsd: null };
     for (const raw of [undefined, null, "", "not json", "[]", "null"]) expect(parseCallMeta(raw), String(raw)).toEqual(none);
     expect(parseCallMeta('{"country":"UAE","slug":"../x","email":"nope"}')).toEqual(none);
   });

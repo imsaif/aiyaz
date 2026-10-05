@@ -21,6 +21,9 @@ export type CallLog = {
   notes: Notes;
   transcript: Turn[];
   summary: string[];
+  // What the token function reserved for this call, from the dispatch metadata (null if not given).
+  reservedDay: string | null;
+  reservedUsd: number | null;
 };
 
 export type CallLogInput = {
@@ -76,13 +79,17 @@ export function buildCallLog(i: CallLogInput): CallLog {
     notes: i.notes,
     transcript: i.transcript,
     summary: summaryLines(i.notes, i.transcript),
+    reservedDay: i.meta.day,
+    reservedUsd: i.meta.reservedUsd,
   };
 }
 
-// The token function reserved reservedUsd for this call on its start day; settle to the real cost.
+// Settle the token function's reservation to the real cost, on the day and by the amount it
+// reserved (from the metadata). Without them: the call's start day and opts.reservedUsd.
 export async function storeCall(kv: KV, log: CallLog, opts: { transcriptDays: number; reservedUsd: number }): Promise<void> {
   await kv.set(CALL_KEY(log.id), JSON.stringify(log), opts.transcriptDays * 86_400);
-  await kv.incrByFloat(SPEND_KEY(log.startedAt.slice(0, 10)), log.costUsd - opts.reservedUsd, TWO_DAYS);
+  const day = log.reservedDay ?? log.startedAt.slice(0, 10);
+  await kv.incrByFloat(SPEND_KEY(day), log.costUsd - (log.reservedUsd ?? opts.reservedUsd), TWO_DAYS);
 }
 
 export function emailSubject(log: CallLog): string {
