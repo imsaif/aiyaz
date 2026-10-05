@@ -38,6 +38,8 @@ export type Settings = {
   voiceUsdPerMinute: number;
   ttsProvider: "elevenlabs" | "cartesia";
   ttsVoiceId: string;
+  // ElevenLabs model id (for example eleven_flash_v2_5); empty means the plugin default.
+  ttsModel: string;
 };
 
 const env = (key: string, fallback: string) => process.env[key] ?? fallback;
@@ -139,5 +141,6 @@ export function loadSettings(): Settings {
     // Chosen by ear in the voice audition; empty voice id means the provider's default voice.
     ttsProvider: ttsFromEnv(),
     ttsVoiceId: env("AIYAZ_TTS_VOICE_ID", ""),
+    ttsModel: env("AIYAZ_TTS_MODEL", ""),
   };
 }

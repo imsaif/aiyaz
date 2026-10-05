@@ -12,6 +12,7 @@
     "briefs": "tsx --env-file-if-exists=.env scripts/push-briefs.ts",
     "voice:dev": "tsx --env-file-if-exists=.env src/voice/agent.ts dev",
     "voice:start": "tsx src/voice/agent.ts start",
+    "voice:audition": "tsx --env-file-if-exists=.env scripts/audition.ts",
     "voice:token": "tsx --env-file-if-exists=.env scripts/dev-token.ts"
   },
   "dependencies": {

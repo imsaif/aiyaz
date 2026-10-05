@@ -21,7 +21,10 @@ import { makeHangUp, startCallTimer } from "./turns.js";
 function makeTts(s: Settings) {
   return s.ttsProvider === "cartesia"
     ? new cartesia.TTS(s.ttsVoiceId ? { voice: s.ttsVoiceId } : {})
-    : new elevenlabs.TTS(s.ttsVoiceId ? { voiceId: s.ttsVoiceId } : {});
+    : new elevenlabs.TTS({
+        ...(s.ttsVoiceId ? { voiceId: s.ttsVoiceId } : {}),
+        ...(s.ttsModel ? { model: s.ttsModel } : {}),
+      });
 }
 
 export default defineAgent({

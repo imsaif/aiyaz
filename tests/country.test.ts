@@ -72,3 +72,21 @@ describe("voice provider setting", () => {
     }
   });
 });
+
+describe("voice model setting", () => {
+  const withModel = (value: string | undefined, fn: () => void) => {
+    const saved = process.env.AIYAZ_TTS_MODEL;
+    try {
+      if (value === undefined) delete process.env.AIYAZ_TTS_MODEL;
+      else process.env.AIYAZ_TTS_MODEL = value;
+      fn();
+    } finally {
+      if (saved === undefined) delete process.env.AIYAZ_TTS_MODEL;
+      else process.env.AIYAZ_TTS_MODEL = saved;
+    }
+  };
+  it("is empty (provider default) when unset, and passes any value through", () => {
+    withModel(undefined, () => expect(loadSettings().ttsModel).toBe(""));
+    withModel("eleven_flash_v2_5", () => expect(loadSettings().ttsModel).toBe("eleven_flash_v2_5"));
+  });
+});
