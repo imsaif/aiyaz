@@ -15,6 +15,7 @@ import { kvFromEnv, kvMissingNotice } from "../kv.js";
 import { AnthropicLLM } from "../llm.js";
 import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
+import { hideSpokenTextInLibraryLogs } from "./log-redact.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
 import { makeHangUp, startCallTimer } from "./turns.js";
 
@@ -32,6 +33,8 @@ export default defineAgent({
     proc.userData.vad = await silero.VAD.load();
   },
   entry: async (ctx: JobContext) => {
+    // First: the session, STT and TTS built below capture the library logger when constructed.
+    hideSpokenTextInLibraryLogs();
     const meta = parseCallMeta(ctx.job.metadata);
     const kv = kvFromEnv();
     const brief = await loadBrief(kv, meta.slug);
