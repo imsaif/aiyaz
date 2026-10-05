@@ -418,3 +418,21 @@ describe("what the visitor heard: ordering and fragments", () => {
     expect(c.trackedReplies).toBeLessThanOrEqual(2);
   });
 });
+
+describe("reply length", () => {
+  it("caps each model call at 300 output tokens by default", async () => {
+    const llm = new FakeLLM([[text("Who uses it?")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("We make an app.");
+    expect(llm.requests[0]!.max_tokens).toBe(300);
+  });
+  it("still speaks the fixed wrap-up line at the time limit", async () => {
+    let now = 0;
+    const llm = new FakeLLM([]);
+    const c = make(llm, { now: () => now });
+    c.start();
+    now = (settings.maxSeconds + 1) * 1000;
+    expect(await c.reply("hello")).toBe(WRAP_UP.time_limit);
+  });
+});

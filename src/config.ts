@@ -133,7 +133,9 @@ export function loadSettings(): Settings {
     maxInputChars: num("AIYAZ_MAX_INPUT_CHARS", 4000),
     maxToolRounds: num("AIYAZ_MAX_TOOL_ROUNDS", 4),
     requestTimeoutMs: num("AIYAZ_REQUEST_TIMEOUT_MS", 30_000),
-    maxOutputTokens: num("AIYAZ_MAX_OUTPUT_TOKENS", 1024),
+    // Spoken replies are two or three short sentences (about 40 tokens); 300 leaves room for a
+    // record_notes call (up to about 90 tokens in call 2) and the closing summary.
+    maxOutputTokens: num("AIYAZ_MAX_OUTPUT_TOKENS", 300),
     forbiddenNames: ["Imran"],
     traceFile: env("AIYAZ_TRACE_FILE", "traces.jsonl"),
     summaryTo: env("AIYAZ_SUMMARY_TO", ""),
