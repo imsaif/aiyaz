@@ -94,6 +94,11 @@ describe("only the sprint price, USD visitor", () => {
       "8 thousand dollars",
       "₹5,00,000",
       "€6,000",
+      "8 million dollars",
+      "8 thousand USD",
+      "7 hundred dollars",
+      "$6,000 or 7 hundred dollars",
+      "6 thousand dollars or eight thousand dollars",
     ]) {
       expect(onlySprintPrice(t, usd), t).toBe(false);
     }
@@ -103,6 +108,7 @@ describe("only the sprint price, USD visitor", () => {
     expect(onlySprintPrice("$6,000", aed)).toBe(false);
     expect(onlySprintPrice("25 thousand dirhams", aed)).toBe(true);
     expect(onlySprintPrice("8 thousand dirhams", aed)).toBe(false);
+    expect(onlySprintPrice("7 hundred dirhams", aed)).toBe(false);
   });
 });
 

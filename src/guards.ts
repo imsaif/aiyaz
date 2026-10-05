@@ -31,7 +31,7 @@ export function toLatinDigits(text: string): string {
 const AR_CURRENCY = "درهم|دراهم|دولار|روبية|يورو|جنيه";
 const MONEY = new RegExp(
   [
-    String.raw`(?:\d[\d,]*(?:\.\d+)?\s?thousand\s?(?:US\s?)?(?:dollars|dirhams?)\b)`,
+    String.raw`(?:\d[\d,]*(?:\.\d+)?\s?(?:thousand|hundred|million)\s?(?:US\s?)?(?:dollars|usd|aed|dirhams?)\b)`,
     String.raw`(?:(?:\$|US\$|USD|AED|Dhs?\.?|EUR|GBP|INR|Rs\.?|€|£|₹)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:k|K|m|M)\b)?)`,
     String.raw`(?:\d[\d,]*(?:\.\d+)?\s?(?:k|K)?\s?(?:US\s?)?(?:dollars|usd|aed|euros|pounds|rupees|dirhams?)\b)`,
     String.raw`(?:\d[\d,]*(?:\.\d+)?\s?(?:(?:[أا]لف|آلاف)\s?)?(?:${AR_CURRENCY}))`,
@@ -42,6 +42,8 @@ const MONEY = new RegExp(
 
 // An amount written in words ("seven thousand dollars", "ثمانية آلاف درهم") has no digits to check.
 const WORDED_AMOUNT = new RegExp(String.raw`(?:thousand|hundred|million|[أا]لف|آلاف|مية|مليون)\s+(?:US\s?)?(?:dollars|dirhams?|${AR_CURRENCY})`, "i");
+
+const WORDED_AMOUNT_ALL = new RegExp(WORDED_AMOUNT.source, "gi");
 
 export function moneyAmounts(text: string): string[] {
   return toLatinDigits(text).match(MONEY) ?? [];
@@ -55,16 +57,17 @@ const OTHER_CURRENCY = /EUR|GBP|INR|\bRs\b\.?|€|£|₹|euros|pounds|rupees|ر�
 
 // True when every money amount in the text is the visitor's own sprint price, in its own currency.
 export function onlySprintPrice(text: string, price: SprintPrice): boolean {
-  if (WORDED_AMOUNT.test(text) && !/\d/.test(text.match(WORDED_AMOUNT)?.[0] ?? "")) {
-    // "25 ألف درهم" and "6 thousand dollars" are parsed below; an amount spelled out in words fails.
-    const before = text.slice(0, text.search(WORDED_AMOUNT));
-    if (!/\d\s*$/.test(toLatinDigits(before))) return false;
+  // Every worded amount must follow a digit ("6 thousand dollars"); one spelled out fully in words fails.
+  for (const w of text.matchAll(WORDED_AMOUNT_ALL)) {
+    if (!/\d\s*$/.test(toLatinDigits(text.slice(0, w.index)))) return false;
   }
   return moneyAmounts(text).every((m) => {
     const currencies = CURRENCY_OF.filter(([, re]) => re.test(m)).map(([c]) => c);
     const hasSuffix = /\d\s?(?:k|K|m|M)\b/.test(m);
     let value = Number((m.match(/\d[\d,]*(?:\.\d+)?/)?.[0] ?? "").replace(/,/g, ""));
     if (/thousand|[أا]لف|آلاف/i.test(m)) value *= 1000;
+    else if (/hundred/i.test(m)) value *= 100;
+    else if (/million/i.test(m)) value *= 1_000_000;
     return (
       currencies.length === 1 &&
       currencies[0] === price.currency &&
