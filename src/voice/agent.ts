@@ -57,6 +57,8 @@ export default defineAgent({
       llm: new AnthropicLLM(settings.requestTimeoutMs),
       tracer: new JsonlTracer(settings.traceFile),
       brief,
+      // Ids and counts only, for example when the price guard replaces a wrong amount.
+      log: (line) => console.log(line),
     });
 
     // A reply the visitor cut off is trimmed to what they heard, in the history and the transcript.

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { loadSettings } from "../src/config.js";
+import { forCountry, loadSettings } from "../src/config.js";
 import { disclosesAtOpening } from "../src/guards.js";
 import { Conversation, WRAP_UP } from "../src/conversation.js";
 import { FallbackLLM, FatalLLMError } from "../src/llm.js";
@@ -497,5 +497,38 @@ describe("a reply cut off at max_tokens", () => {
     const said = await c.reply("What do you do?");
     expect(said).toBe("Could you tell me a little more about that?");
     expect(assistantJson(c)).not.toContain("We help teams with");
+  });
+});
+
+describe("price guard on spoken replies", () => {
+  it("never speaks or stores a price other than the visitor's own", async () => {
+    const lines: string[] = [];
+    const llm = new FakeLLM([[text("The sprint is AED 25,000. Who signs off on it?")]]);
+    const c = new Conversation({ settings: forCountry(settings, "IN"), llm, tracer: new MemoryTracer(), log: (l) => lines.push(l) });
+    c.start();
+    const said = await c.reply("What does it cost?");
+    expect(said).toBe("The two-week sprint is USD 6,000. Who signs off on it?");
+    expect(c.transcript.at(-1)!.text).toBe(said);
+    expect(JSON.stringify((c as unknown as { messages: unknown[] }).messages)).not.toContain("25,000");
+    expect(lines).toEqual([`[call] ${c.id} price guard replaced 1`]);
+  });
+  it("leaves the visitor's own price alone and logs nothing", async () => {
+    const lines: string[] = [];
+    const llm = new FakeLLM([[text("The sprint is USD 6,000. Who signs off on it?")]]);
+    const c = new Conversation({ settings: forCountry(settings, "IN"), llm, tracer: new MemoryTracer(), log: (l) => lines.push(l) });
+    c.start();
+    expect(await c.reply("What does it cost?")).toBe("The sprint is USD 6,000. Who signs off on it?");
+    expect(lines).toEqual([]);
+  });
+});
+
+describe("price guard when the call stops early", () => {
+  it("also guards model text spoken before a wrap-up line", async () => {
+    const llm = new FakeLLM([[text("It is AED 25,000."), tool("record_notes", { product: "x" })], new Error("boom")]);
+    const c = new Conversation({ settings: forCountry(settings, "IN"), llm, tracer: new MemoryTracer() });
+    c.start();
+    const said = await c.reply("What does it cost?");
+    expect(said).not.toContain("25,000");
+    expect(said).toContain("USD 6,000");
   });
 });

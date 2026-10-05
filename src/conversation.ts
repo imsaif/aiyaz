@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Settings } from "./config.js";
-import { scrubForbiddenNames } from "./guards.js";
+import { scrubForbiddenNames, withOnlySprintPrice } from "./guards.js";
 import { FallbackLLM, type LLMClient } from "./llm.js";
 import { applyNotesUpdate, emptyNotes, type Brief, type Notes, type NotesUpdate } from "./notes.js";
 import { costUsd } from "./prices.js";
-import { buildSystemPrompt, openingLine, type BuiltPrompt } from "./prompt.js";
+import { buildSystemPrompt, formatPrice, openingLine, type BuiltPrompt } from "./prompt.js";
 import type { Tracer } from "./tracer.js";
 
 export type EndReason = "agent_ended" | "time_limit" | "turn_limit" | "cost_limit" | "error";
@@ -90,6 +90,8 @@ export type ConversationDeps = {
   tracer: Tracer;
   brief?: Brief | null;
   now?: () => number;
+  // One-line operational log (ids and counts only); the worker passes console.log.
+  log?: (line: string) => void;
 };
 
 export class Conversation {
@@ -106,6 +108,7 @@ export class Conversation {
   private readonly brief: Brief | null;
   private readonly prompt: BuiltPrompt;
   private readonly now: () => number;
+  private readonly log: (line: string) => void;
   private readonly startedAt: number;
   private readonly messages: Anthropic.MessageParam[] = [];
   private prospectTurns = 0;
@@ -125,6 +128,7 @@ export class Conversation {
     this.brief = deps.brief ?? null;
     this.prompt = buildSystemPrompt(deps.settings, this.brief);
     this.now = deps.now ?? Date.now;
+    this.log = deps.log ?? (() => undefined);
     this.startedAt = this.now();
     this.notes = emptyNotes(this.brief);
   }
@@ -208,6 +212,7 @@ export class Conversation {
     if (this.prospectTurns > this.settings.maxTurns) return this.finish("turn_limit");
     if (this.overCostCap()) return this.finish("cost_limit");
 
+    const firstMessage = this.messages.length;
     // Tool results deferred from the previous turn must lead the next user message.
     const note: Anthropic.TextBlockParam[] = this.cutOffNote ? [{ type: "text", text: this.cutOffNote }] : [];
     this.messages.push(
@@ -316,9 +321,30 @@ export class Conversation {
 
     if (!this.ended && this.overCostCap()) return this.finish("cost_limit", spoken);
 
-    const said = spoken.join(" ") || TOOL_ROUND_FALLBACK;
+    const said = this.withVisitorPrice(spoken.join(" ") || TOOL_ROUND_FALLBACK, firstMessage);
     this.transcript.push({ role: "aiyaz", text: said });
     return said;
+  }
+
+  // The price spoken must always match what the site shows this visitor. A wrong amount is
+  // replaced in the spoken text and in this reply's history, so the model does not repeat it.
+  private withVisitorPrice(text: string, firstMessage: number): string {
+    const price = this.settings.sprintPrice;
+    const fixedLine = `The two-week sprint is ${formatPrice(price)}.`;
+    const guarded = withOnlySprintPrice(text, price, fixedLine);
+    if (!guarded.replaced) return text;
+    for (const message of this.messages.slice(firstMessage)) {
+      if (message.role !== "assistant") continue;
+      if (typeof message.content === "string") {
+        message.content = withOnlySprintPrice(message.content, price, fixedLine).text;
+        continue;
+      }
+      for (const block of message.content) {
+        if (block.type === "text") block.text = withOnlySprintPrice(block.text, price, fixedLine).text;
+      }
+    }
+    this.log(`[call] ${this.id} price guard replaced ${guarded.replaced}`);
+    return guarded.text;
   }
 
   // Ends the call from outside the model loop, for example the worker's 10-minute timer.
@@ -338,7 +364,8 @@ export class Conversation {
   private finish(reason: Exclude<EndReason, "agent_ended">, spoken: string[] = []): string {
     this.ended = true;
     this.endReason = reason;
-    const said = [...spoken, WRAP_UP[reason]].join(" ");
+    const before = spoken.length ? [this.withVisitorPrice(spoken.join(" "), this.messages.length)] : [];
+    const said = [...before, WRAP_UP[reason]].join(" ");
     this.transcript.push({ role: "aiyaz", text: said });
     return said;
   }

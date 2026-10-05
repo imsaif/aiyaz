@@ -88,3 +88,20 @@ export function onlySprintPrice(text: string, price: SprintPrice): boolean {
     );
   });
 }
+
+// Before a reply is spoken: every sentence naming any price other than the visitor's own sprint
+// price is replaced by `fixedLine` (the visitor's price), so a wrong amount is never said.
+// A run of wrong sentences becomes one fixed line.
+export function withOnlySprintPrice(text: string, price: SprintPrice, fixedLine: string): { text: string; replaced: number } {
+  let replaced = 0;
+  const out: string[] = [];
+  for (const sentence of text.split(/(?<=[.?!])\s+/)) {
+    if (onlySprintPrice(sentence, price)) {
+      out.push(sentence);
+      continue;
+    }
+    replaced++;
+    if (out.at(-1) !== fixedLine) out.push(fixedLine);
+  }
+  return { text: replaced ? out.join(" ") : text, replaced };
+}

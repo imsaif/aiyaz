@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits } from "../src/guards.js";
+import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits, withOnlySprintPrice } from "../src/guards.js";
 import { costUsd } from "../src/prices.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 
@@ -152,5 +152,30 @@ describe("disclosesAtOpening", () => {
     expect(disclosesAtOpening(`Hello. ${ai} Who are you?`, "Aiyaz")).toBe(false);
     expect(disclosesAtOpening(`Hi Acme. Welcome. ${ai}`, "Aiyaz")).toBe(false);
     expect(disclosesAtOpening("", "Aiyaz")).toBe(false);
+  });
+});
+
+describe("withOnlySprintPrice", () => {
+  const usd = { amount: 6000, currency: "USD" as const };
+  const line = "The two-week sprint is USD 6,000.";
+  it("replaces a sentence naming another price with the visitor's price", () => {
+    const out = withOnlySprintPrice("Good question. The sprint is AED 25,000. Who signs off?", usd, line);
+    expect(out).toEqual({ text: "Good question. The two-week sprint is USD 6,000. Who signs off?", replaced: 1 });
+  });
+  it("leaves the right price alone", () => {
+    const text = "The sprint is USD 6,000 for two weeks. Shall I book a call?";
+    expect(withOnlySprintPrice(text, usd, line)).toEqual({ text, replaced: 0 });
+  });
+  it("leaves a reply with no amount alone", () => {
+    const text = "Who uses it day to day?";
+    expect(withOnlySprintPrice(text, usd, line)).toEqual({ text, replaced: 0 });
+  });
+  it("catches an amount written in words", () => {
+    const out = withOnlySprintPrice("It costs twenty-five thousand dirhams. Does that work?", usd, line);
+    expect(out).toEqual({ text: "The two-week sprint is USD 6,000. Does that work?", replaced: 1 });
+  });
+  it("says the fixed line once when several sentences in a row are wrong", () => {
+    const out = withOnlySprintPrice("It is AED 25,000. That is about $6,800. Who signs off?", usd, line);
+    expect(out).toEqual({ text: "The two-week sprint is USD 6,000. Who signs off?", replaced: 2 });
   });
 });
