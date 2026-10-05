@@ -36,6 +36,8 @@ export type Settings = {
   transcriptDays: number;
   // Deepgram + TTS estimate per call minute, counted in the daily total. Measured in the voice spike.
   voiceUsdPerMinute: number;
+  ttsProvider: "elevenlabs" | "cartesia";
+  ttsVoiceId: string;
 };
 
 const env = (key: string, fallback: string) => process.env[key] ?? fallback;
@@ -127,5 +129,8 @@ export function loadSettings(): Settings {
     // Spec assumption, Imran to confirm.
     transcriptDays: num("AIYAZ_TRANSCRIPT_DAYS", 30),
     voiceUsdPerMinute: num("AIYAZ_VOICE_USD_PER_MIN", 0.05),
+    // Chosen by ear in the voice audition; empty voice id means the provider's default voice.
+    ttsProvider: env("AIYAZ_TTS", "elevenlabs") === "cartesia" ? "cartesia" : "elevenlabs",
+    ttsVoiceId: env("AIYAZ_TTS_VOICE_ID", ""),
   };
 }

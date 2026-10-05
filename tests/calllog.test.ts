@@ -173,4 +173,15 @@ describe("sendCallEmails", () => {
     expect(lines[0]).not.toContain("acme.example");
     expect(lines[0]).not.toContain("invoicing");
   });
+  it("skips only the team email when the team address is blank", async () => {
+    const f = okFetch();
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((m: string) => void lines.push(String(m)));
+    await sendCallEmails(log, { apiKey: "k", to: "  ", from: "Aiyaz <work@getaiengineer.dev>", fetchFn: f.fn });
+    spy.mockRestore();
+    expect(f.calls.map((c) => c.body.to)).toEqual([["cto@acme.example"]]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(log.id);
+    expect(lines[0]).not.toContain("acme.example");
+  });
 });

@@ -9,14 +9,25 @@
     "evals:watch": "evalite watch",
     "typecheck": "tsc --noEmit",
     "review:arabic": "tsx evals/arabic/sheet.ts",
-    "briefs": "tsx --env-file-if-exists=.env scripts/push-briefs.ts"
+    "briefs": "tsx --env-file-if-exists=.env scripts/push-briefs.ts",
+    "voice:dev": "tsx --env-file-if-exists=.env src/voice/agent.ts dev",
+    "voice:start": "tsx src/voice/agent.ts start",
+    "voice:token": "tsx --env-file-if-exists=.env scripts/dev-token.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.128.0"
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@livekit/agents": "1.9.1",
+    "@livekit/agents-plugin-cartesia": "1.9.1",
+    "@livekit/agents-plugin-deepgram": "1.9.1",
+    "@livekit/agents-plugin-elevenlabs": "1.9.1",
+    "@livekit/agents-plugin-silero": "1.9.1",
+    "@livekit/rtc-node": "1.1.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
     "evalite": "^0.19.0",
+    "livekit-server-sdk": "2.19.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

@@ -173,7 +173,7 @@ export async function sendVisitorEmail(
   );
 }
 
-// Team email first, then the visitor's. Logs carry ids and numbers only.
+// Team email first (skipped when no team address is set), then the visitor's. Logs carry ids and numbers only.
 export async function sendCallEmails(
   log: CallLog,
   opts: { apiKey?: string; to: string; from: string; fetchFn?: typeof fetch },
@@ -182,6 +182,10 @@ export async function sendCallEmails(
     console.log(`[call] ${log.id} emails skipped: RESEND_API_KEY not set`);
     return;
   }
-  await sendSummaryEmail(log, { apiKey: opts.apiKey, to: opts.to, from: opts.from, fetchFn: opts.fetchFn });
+  if (opts.to.trim()) {
+    await sendSummaryEmail(log, { apiKey: opts.apiKey, to: opts.to, from: opts.from, fetchFn: opts.fetchFn });
+  } else {
+    console.log(`[call] ${log.id} team email skipped: no summary address`);
+  }
   await sendVisitorEmail(log, { apiKey: opts.apiKey, from: opts.from, fetchFn: opts.fetchFn });
 }
