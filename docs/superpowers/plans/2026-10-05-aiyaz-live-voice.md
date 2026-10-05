@@ -3287,7 +3287,7 @@ Expected: the worker logs that it registered with LiveKit as agent `aiyaz`.
 - **G9** No transcript text in any log: read the whole worker output, including the lines written by `@livekit/agents` itself (not only our `[call]` and `[latency]` lines), and confirm none of them carries what the visitor or Aiyaz said. If a library line does, report it to Imran with the log level that prints it.
 - **G10** Close time: the shutdown callbacks and the Resend fetch have no timeout of their own. For each call, note the time from hang-up (or tab close) to the `[call]` line. If any close takes more than a few seconds, or never logs, report it to Imran before Task 17.
 
-- [ ] **Step 7: Delete the test brief.** The slug `acme-test` is public in this repo, so the brief must not stay live. In the Upstash console (Data Browser for the getaiengineer database), delete the key `aiyaz:brief:acme-test` and confirm a lookup for it returns nothing. Task 17 writes it again only for its lead checks and deletes it again after.
+- [ ] **Step 7: Delete the test brief.** The slug `acme-test` is public in this repo, so the brief must not stay live. In the Upstash console (Data Browser for the getaiengineer database), delete the key `aiyaz:brief:acme-test` and confirm a lookup for it returns nothing. Any later task that needs it (Task 16 Step 2, Task 17) writes it again with `pnpm briefs --acme-test --write`; delete it again once that task's checks are done.
 
 - [ ] **Step 8: Measure voice cost.** From the Deepgram and TTS dashboards, divide today's usage cost by the call minutes from the `[call]` lines. Set the `AIYAZ_VOICE_USD_PER_MIN` default in `src/config.ts` to that number rounded up to two decimals.
 
@@ -3539,7 +3539,7 @@ git commit -m "Deploy the Aiyaz voice worker to Fly.io (Mumbai, no public port)"
 
 - [ ] **Step 6: Site preview (workflow step 3 and 4 gates: ask Imran before pushing).** Set on Vercel for Preview: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (`npx vercel@latest env add <NAME> preview`). Leave `AIYAZ_HOMEPAGE_CALLS` unset (unset means off: only lead links can start a call, and the token function answers 404 to any other call). With Imran's yes, push branch `aiyaz-live-voice` from the site worktree and open its preview URL. Before the lead checks below, write the test brief again with `pnpm briefs --acme-test --write` (Task 14 Step 7 deleted it).
 
-- [ ] **Step 7: Preview checks** (pass/fail, written down for Imran):
+- [ ] **Step 7: Preview checks** (pass/fail, written down for Imran). Every live call goes through the lead link, and one IP gets 3 calls a day, so keep to this order: call 1 covers the opener, the price question, one interruption, 20 s of silence and closing the tab; call 2 is the worker-down check (the token is minted, so it counts); call 3 any repeat; the 4th-call limit check comes last. Do the phone check on mobile data (a different IP).
 - `GET <preview>/node_modules/livekit-server-sdk/package.json` returns 404, and `<preview>/tests/price.test.js` returns 404.
 - A visitor without a lead link (plain `<preview>/`) still sees "Play example" and no live call or email step. From India, the hero and price card show `$6,000`. Ideally someone in the UAE checks AED 25,000.
 - Lead call `<preview>/?ref=acme-test`: the card says "Talk to Aiyaz about Acme", no email asked, and the opener is exactly "Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?". From India, Aiyaz says USD 6,000 when asked the price.
