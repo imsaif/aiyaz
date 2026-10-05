@@ -25,6 +25,8 @@ const TOOLS: Anthropic.Tool[] = [
         owner: { type: "string", description: "Who owns the AI feature (role, not necessarily a name)." },
         add_symptoms: { type: "array", items: { type: "string" }, description: "Problems users hit." },
         add_tried: { type: "array", items: { type: "string" }, description: "What they already tried." },
+        visitor_name: { type: "string", description: "The visitor's name, when they say who they are." },
+        visitor_role: { type: "string", description: "The visitor's role or job title, when they say it." },
         visitor_email: { type: "string", description: "The visitor's email address, only when they gave it for the summary." },
         confirm_facts: { type: "array", items: { type: "string" }, description: "Brief facts the prospect confirmed, exact brief text." },
         reject_facts: { type: "array", items: { type: "string" }, description: "Brief facts the prospect said are wrong, exact brief text." },

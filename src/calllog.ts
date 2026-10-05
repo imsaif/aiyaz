@@ -92,6 +92,8 @@ export function emailSubject(log: CallLog): string {
 
 export function emailText(log: CallLog): string {
   return [
+    ...(log.notes.visitor_name ? [`Visitor name: ${log.notes.visitor_name}`] : []),
+    ...(log.notes.visitor_role ? [`Visitor role: ${log.notes.visitor_role}`] : []),
     `Visitor email: ${log.email ?? "not given"}`,
     `Company: ${log.company ?? "not known"}${log.slug ? ` (lead link ${log.slug})` : ""}`,
     `Country: ${log.country ?? "unknown"}`,

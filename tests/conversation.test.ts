@@ -17,10 +17,11 @@ describe("opening", () => {
       "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
     );
   });
-  it("asks about a brief fact instead of asserting it", () => {
+  it("greets a lead by company name and asks who they are", () => {
     const brief = { company: "Acme", facts: [{ text: "launched an AI support bot", source: "https://acme.test" }] };
     const opener = make(new FakeLLM([]), { brief }).start();
-    expect(opener).toBe("I'm Aiyaz, an AI agent from getaiengineer.dev. I read that you launched an AI support bot. Is that right?");
+    expect(opener).toBe("Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?");
+    expect(opener.split(/(?<=[.?!])\s/)[0]).toContain("an AI agent");
   });
 });
 
@@ -162,6 +163,15 @@ describe("visitor email", () => {
     await c.reply("hi");
     const t = (llm.requests[0]!.tools as { name: string }[]).find((x) => x.name === "record_notes") as unknown as { input_schema: { properties: Record<string, unknown> } };
     expect(t.input_schema.properties).toHaveProperty("visitor_email");
+  });
+  it("exposes visitor_name and visitor_role on the record_notes tool", async () => {
+    const llm = new FakeLLM([[text("Hello.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("hi");
+    const t = (llm.requests[0]!.tools as { name: string }[]).find((x) => x.name === "record_notes") as unknown as { input_schema: { properties: Record<string, unknown> } };
+    expect(t.input_schema.properties).toHaveProperty("visitor_name");
+    expect(t.input_schema.properties).toHaveProperty("visitor_role");
   });
   it("keeps a valid email from record_notes and drops an invalid one", async () => {
     const llm = new FakeLLM([

@@ -19,3 +19,23 @@ describe("visitor email in notes", () => {
     expect(applyNotesUpdate(stored, { visitor_email: "nope" }).visitor_email).toBe("sam@acme.test");
   });
 });
+
+describe("visitor name and role in notes", () => {
+  const start = emptyNotes(null);
+  it("start empty", () => {
+    expect(start.visitor_name).toBeNull();
+    expect(start.visitor_role).toBeNull();
+  });
+  it("store trimmed", () => {
+    const n = applyNotesUpdate(start, { visitor_name: "  Sam Lee ", visitor_role: " CTO " });
+    expect(n.visitor_name).toBe("Sam Lee");
+    expect(n.visitor_role).toBe("CTO");
+  });
+  it("blank values are ignored and never replace a stored one", () => {
+    expect(applyNotesUpdate(start, { visitor_name: "   ", visitor_role: "" }).visitor_name).toBeNull();
+    const stored = applyNotesUpdate(start, { visitor_name: "Sam", visitor_role: "CTO" });
+    const next = applyNotesUpdate(stored, { visitor_name: " ", visitor_role: "" });
+    expect(next.visitor_name).toBe("Sam");
+    expect(next.visitor_role).toBe("CTO");
+  });
+});

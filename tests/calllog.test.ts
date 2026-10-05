@@ -156,6 +156,24 @@ describe("visitor email", () => {
   });
 });
 
+describe("visitor name and role", () => {
+  const named = buildCallLog({
+    id: "c9", startedAt: START, endedAt: START + 60_000, meta: { country: "AE", slug: null, email: "cto@acme.example" }, company: "Acme",
+    endReason: "x", claudeUsd: 0, transcript, voiceUsdPerMinute: 0.05,
+    notes: applyNotesUpdate(notes, { visitor_name: "Sam Lee", visitor_role: "CTO" }),
+  });
+  it("shows in the team email only when given", () => {
+    expect(emailText(named)).toContain("Visitor name: Sam Lee");
+    expect(emailText(named)).toContain("Visitor role: CTO");
+    expect(emailText(log)).not.toContain("Visitor name");
+    expect(emailText(log)).not.toContain("Visitor role");
+  });
+  it("never shows in the visitor email", () => {
+    expect(visitorEmailText(named)).not.toContain("Sam Lee");
+    expect(visitorEmailText(named)).not.toContain("CTO");
+  });
+});
+
 describe("sendCallEmails", () => {
   it("sends the team email, then the visitor email", async () => {
     const f = okFetch();

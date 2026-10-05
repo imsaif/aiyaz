@@ -14,6 +14,8 @@ export type Notes = {
   confirmedFacts: string[];
   unconfirmedFacts: string[];
   visitor_email: string | null;
+  visitor_name: string | null;
+  visitor_role: string | null;
 };
 
 export function emptyNotes(brief: Brief | null): Notes {
@@ -28,6 +30,8 @@ export function emptyNotes(brief: Brief | null): Notes {
     // Everything in a brief starts unconfirmed until the prospect says so.
     unconfirmedFacts: brief ? brief.facts.map((f) => f.text) : [],
     visitor_email: null,
+    visitor_name: null,
+    visitor_role: null,
   };
 }
 
@@ -41,6 +45,8 @@ export type NotesUpdate = {
   confirm_facts?: string[];
   reject_facts?: string[];
   visitor_email?: string;
+  visitor_name?: string;
+  visitor_role?: string;
 };
 
 const addUnique = (list: string[], items: string[] | undefined) => {
@@ -56,6 +62,8 @@ export function applyNotesUpdate(notes: Notes, update: NotesUpdate): Notes {
   if (update.users?.trim()) next.users = update.users.trim();
   if (update.ai_feature?.trim()) next.aiFeature = update.ai_feature.trim();
   if (update.owner?.trim()) next.owner = update.owner.trim();
+  if (update.visitor_name?.trim()) next.visitor_name = update.visitor_name.trim();
+  if (update.visitor_role?.trim()) next.visitor_role = update.visitor_role.trim();
   // Same check as the token function. An invalid value never replaces a stored one.
   const email = typeof update.visitor_email === "string" ? update.visitor_email.trim().toLowerCase() : "";
   if (EMAIL.test(email)) next.visitor_email = email;

@@ -41,11 +41,12 @@ describe("v2 prompt", () => {
       "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
     );
   });
-  it("keeps the brief-confirmation opener when there is a brief", () => {
-    const brief = { company: "X", facts: [{ text: "launched an AI assistant", source: "s" }] };
-    expect(openingLine(v2, brief)).toBe(
-      "I'm Aiyaz, an AI agent from getaiengineer.dev. I read that you launched an AI assistant. Is that right?",
-    );
+  it("greets the company by name and asks who is speaking when there is a brief", () => {
+    const brief = { company: "  Acme ", facts: [{ text: "launched an AI assistant", source: "s" }] };
+    const line = openingLine(v2, brief);
+    expect(line).toBe("Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?");
+    expect(line.split(/(?<=[.?!])\s/)[0]).toContain("an AI agent");
+    expect(line).not.toContain("I read that");
   });
 });
 
@@ -143,6 +144,15 @@ describe("lead-call email step", () => {
     expect(text).not.toContain("Imran");
     expect(text).not.toContain("\u2014");
     expect(text).not.toMatch(/\{\{\w+\}\}/);
+  });
+  it("a lead call records who they are, then asks the brief facts as questions", () => {
+    const text = buildSystemPrompt(base, brief).text;
+    expect(text).toContain("visitor_name");
+    expect(text).toContain("visitor_role");
+    expect(text).toContain("asked who they are");
+    expect(text).not.toContain("first fact");
+    expect(text).not.toContain("Imran");
+    expect(text).not.toContain("\u2014");
   });
   it("a call with no brief does not ask for an email", () => {
     const text = buildSystemPrompt(base, null).text;
