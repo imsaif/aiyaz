@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TurnRunner, startCallTimer, type Brain } from "../src/voice/turns.js";
+import { HANGUP_PLAYOUT_CAP_MS, TurnRunner, makeHangUp, startCallTimer, type Brain } from "../src/voice/turns.js";
 
 function fakeBrain(ms = 5, endAfter = Infinity) {
   let running = 0;
@@ -89,5 +89,38 @@ describe("call timer", () => {
     cancel();
     vi.advanceTimersByTime(600_000);
     expect(onExpire).not.toHaveBeenCalled();
+  });
+});
+
+describe("makeHangUp", () => {
+  afterEach(() => vi.useRealTimers());
+  it("shuts down after the cap when playout never settles", async () => {
+    vi.useFakeTimers();
+    const shutdown = vi.fn();
+    const hang = makeHangUp({ say: () => new Promise<void>(() => {}), shutdown });
+    const done = hang("Goodbye.");
+    await vi.advanceTimersByTimeAsync(HANGUP_PLAYOUT_CAP_MS - 1);
+    expect(shutdown).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2);
+    await done;
+    expect(shutdown).toHaveBeenCalledTimes(1);
+  });
+  it("shuts down when say throws", async () => {
+    const shutdown = vi.fn();
+    const errs: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((m: string) => void errs.push(String(m)));
+    await makeHangUp({ say: async () => { throw new Error("secret transcript"); }, shutdown })("Bye.");
+    spy.mockRestore();
+    expect(shutdown).toHaveBeenCalledTimes(1);
+    expect(errs.join()).not.toContain("secret transcript");
+  });
+  it("shuts down at once with no line, and a second call is a no-op", async () => {
+    const shutdown = vi.fn();
+    const say = vi.fn(async () => {});
+    const hang = makeHangUp({ say, shutdown });
+    await hang("");
+    await hang("Bye.");
+    expect(say).not.toHaveBeenCalled();
+    expect(shutdown).toHaveBeenCalledTimes(1);
   });
 });

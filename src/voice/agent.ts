@@ -16,7 +16,7 @@ import { AnthropicLLM } from "../llm.js";
 import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
-import { startCallTimer } from "./turns.js";
+import { makeHangUp, startCallTimer } from "./turns.js";
 
 function makeTts(s: Settings) {
   return s.ttsProvider === "cartesia"
@@ -57,13 +57,10 @@ export default defineAgent({
       if (ev.isFinal) heardAt = Date.now();
     });
 
-    let closing = false;
-    const hangUp = async (line: string) => {
-      if (closing) return;
-      closing = true;
-      if (line) await session.say(line).waitForPlayout();
-      ctx.shutdown("call ended");
-    };
+    const hangUp = makeHangUp({
+      say: (line) => session.say(line).waitForPlayout().then(() => undefined),
+      shutdown: () => ctx.shutdown("call ended"),
+    });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       if (ev.newState === "speaking" && heardAt) {
         console.log(`[latency] ${Date.now() - heardAt} ms`);
@@ -95,7 +92,7 @@ export default defineAgent({
       });
       if (kv) {
         await storeCall(kv, log, { transcriptDays: settings.transcriptDays, reservedUsd: settings.costCapUsd }).catch((err) =>
-          console.error(`[call] store failed: ${String(err)}`),
+          console.error(`[call] store failed: ${err instanceof Error ? err.name : "unknown"}`),
         );
       }
       // Never throws into the worker; sendCallEmails skips quietly without a key.
@@ -112,7 +109,7 @@ export default defineAgent({
 
     await session.start({ agent: new voice.Agent({ instructions: "" }), room: ctx.room });
     // Fixed text from code: the AI disclosure never depends on the model.
-    session.say(brain.start());
+    session.say(brain.start(), { allowInterruptions: false });
   },
 });
 

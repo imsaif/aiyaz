@@ -29,3 +29,28 @@ export function startCallTimer(maxSeconds: number, onExpire: () => void): () => 
   const timer = setTimeout(onExpire, maxSeconds * 1000);
   return () => clearTimeout(timer);
 }
+
+// Longest we wait for the goodbye to finish playing before leaving anyway.
+export const HANGUP_PLAYOUT_CAP_MS = 15_000;
+
+// Say the closing line (if any), then shut down exactly once. Playout that never settles or a
+// say that throws must not keep the call open or skip the shutdown callback.
+export function makeHangUp(io: { say: (line: string) => Promise<void>; shutdown: () => void }) {
+  let closing = false;
+  return async (line: string): Promise<void> => {
+    if (closing) return;
+    closing = true;
+    let cap: ReturnType<typeof setTimeout> | undefined;
+    try {
+      if (line) {
+        const timeout = new Promise<void>((r) => (cap = setTimeout(r, HANGUP_PLAYOUT_CAP_MS)));
+        await Promise.race([io.say(line), timeout]);
+      }
+    } catch (err) {
+      console.error(`[call] hang-up speech failed: ${err instanceof Error ? err.name : "unknown"}`);
+    } finally {
+      clearTimeout(cap);
+      io.shutdown();
+    }
+  };
+}
