@@ -16,3 +16,12 @@ describe("session turn handling", () => {
     expect(preemptiveGeneration.enabled).toBe(false);
   });
 });
+
+describe("session endpointing", () => {
+  it("waits 750 ms after speech before committing a likely-finished turn, so a slow final transcript joins it", () => {
+    const session = new voice.AgentSession({ turnHandling: SESSION_TURN_HANDLING });
+    const { endpointing } = session.sessionOptions.turnHandling;
+    expect(endpointing.minDelay).toBe(750);
+    expect(endpointing.maxDelay).toBe(2500);
+  });
+});

@@ -6,6 +6,16 @@ type TurnHandling = NonNullable<ConstructorParameters<typeof voice.AgentSession>
 export const SESSION_TURN_HANDLING = {
   // Off: a speculative run would call the stateful brain before the visitor finished.
   preemptiveGeneration: { enabled: false },
+  endpointing: {
+    // Silence (from the last speech) before a likely-finished turn is committed. The library's
+    // streaming default is 300 ms, below Silero's 550 ms end-of-speech silence, so turns were
+    // committed the moment voice activity stopped and a final transcript arriving just after
+    // started a second turn (call 2: one final landed 26 ms after the commit). 750 ms leaves
+    // 200 ms after end of speech for Deepgram's final, adding about 0.2 s to a normal turn.
+    minDelay: 750,
+    // Unchanged library default, for turns the turn detector thinks are unfinished.
+    maxDelay: 2500,
+  },
   interruption: {
     // Pinned: left unset, LiveKit uses its cloud model in dev but voice activity in start,
     // and the model took about 2.5 s to stop Aiyaz in the first live call.
