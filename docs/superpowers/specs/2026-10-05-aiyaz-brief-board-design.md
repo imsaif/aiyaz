@@ -156,6 +156,35 @@ so Imran can see for each of the 10 leads: opened, talked, booked.
 **Nudge, not opened (day 3):**
 > Hi {first name}, quick nudge on this. It takes 10 minutes and you keep the brief: {link}.
 
+## Phase 2: live company research (Imran, 2026-10-05)
+
+Ships after the board. While the visitor talks, a research helper looks up the company on the
+public web and adds what it finds to the board.
+
+- **When it runs:** once the company is known (from the lead brief, or the first time the
+  visitor names it on a homepage call). One research run per call; a "Talk again" call
+  reuses the saved findings and does not search again.
+- **How:** a separate Claude call with the Anthropic web search tool, running beside the
+  conversation, never blocking a reply. Limited to about 5 searches and 20 seconds.
+- **What it looks for, company only:** what the company does, stage (founded year, funding
+  round named without amounts), approximate headcount band, location, recent news, AI or
+  data hiring, a public company-register or free-zone listing if one turns up.
+- **Never about the person** on the call: no searching their name, profile or history.
+- **LinkedIn:** only what appears in public search results. No logging in, no scraping.
+- **What appears on the board:** up to 5 "Found online" cards, each one short sentence with
+  its source link and the tag **to confirm**. Same rules as brief facts: asked, never
+  asserted; a fact with no source or with a money amount is dropped before it reaches the
+  board or Aiyaz. Visitors can edit or delete them like any card.
+- **How Aiyaz uses them:** they join the model's context as unconfirmed facts. Aiyaz may ask
+  about at most one or two ("I saw you're hiring ML engineers. Is that for this project?").
+  `confirm_facts` / `reject_facts` work on them as on brief facts.
+- **Cost:** counted in the call's cost and the USD 1 per-call cap (expected a few cents).
+  If the cap is near, research is skipped.
+- **Failure:** no results or an error simply means no "Found online" cards. Logs carry the
+  call id and a count only.
+- **Privacy:** findings are stored with the board (30 days) and in the call log; never in
+  logs or the repo. The team email lists them with their sources.
+
 ## Out of scope
 
 - Sending messages automatically (Imran sends every message himself).
@@ -175,9 +204,14 @@ so Imran can see for each of the 10 leads: opened, talked, booked.
   keyboard and screen reader labels on cards.
 - One live call per path (homepage, lead, revisit) before the first LinkedIn message goes
   out.
+- Phase 2: research output parsing (sourceless and money facts dropped, at most 5 cards);
+  research never searches the visitor's name; runs once per call and is skipped near the
+  cost cap; a failed search leaves the call unaffected; evals with made-up companies only.
 
 ## Open for Imran
 
 1. Privacy note wording above.
 2. The page address: `getaiengineer.dev/aiyaz` (proposed).
 3. The outreach copy drafts.
+4. Phase 2: whether the visitor sees a small "Aiyaz is looking you up online" note when
+   research starts (proposed: yes, one line on the board).
