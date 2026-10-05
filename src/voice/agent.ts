@@ -17,7 +17,7 @@ import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
 import { hideSpokenTextInLibraryLogs } from "./log-redact.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
-import { SESSION_TURN_HANDLING } from "./session-setup.js";
+import { SESSION_TURN_HANDLING, sessionErrorLine } from "./session-setup.js";
 import { makeHangUp, startCallTimer } from "./turns.js";
 
 function makeTts(s: Settings) {
@@ -62,6 +62,9 @@ export default defineAgent({
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       if (ev.isFinal) heardAt = Date.now();
     });
+
+    // The library logs these only when it gives up on the session; we want every one.
+    session.on(voice.AgentSessionEventTypes.Error, (ev) => console.error(sessionErrorLine(brain.id, ev)));
 
     const hangUp = makeHangUp({
       say: (line) => session.say(line).waitForPlayout().then(() => undefined),

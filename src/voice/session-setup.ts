@@ -17,3 +17,20 @@ export const SESSION_TURN_HANDLING = {
     resumeFalseInterruption: true,
   },
 } satisfies TurnHandling;
+
+// One log line per STT, TTS or LLM failure (LiveKit forwards all three as the session's Error
+// event). Ids, names and codes only: an error message can quote what was said.
+export function sessionErrorLine(callId: string, ev: voice.ErrorEvent): string {
+  const failure = ev.error as { type: string; label?: string; recoverable?: boolean; error?: unknown };
+  const inner = failure.error instanceof Error ? failure.error : undefined;
+  const code = (inner as { statusCode?: unknown } | undefined)?.statusCode;
+  return [
+    `[call] ${callId} error component=${failure.type}`,
+    failure.label ? `label=${failure.label}` : "",
+    `name=${inner?.name ?? "unknown"}`,
+    typeof code === "number" ? `code=${code}` : "",
+    `recoverable=${failure.recoverable ?? false}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
