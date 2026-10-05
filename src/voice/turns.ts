@@ -25,6 +25,8 @@ export class TurnRunner {
   private readonly cutOff = new Map<string, string>();
   private readonly reported = new Set<string>();
   private lastReplied: string | null = null;
+  // Words of turns LiveKit dropped before their reply started, said again with the next turn.
+  private carried = "";
 
   constructor(
     private readonly brain: Brain,
@@ -36,7 +38,8 @@ export class TurnRunner {
     return this.cutOff.size;
   }
 
-  handle(turnId: string, heard: string): Promise<string | null> {
+  // signal: LiveKit aborts it when it drops this turn's reply (a newer turn superseded it).
+  handle(turnId: string, heard: string, signal?: AbortSignal): Promise<string | null> {
     // Asked again for a turn already in hand (interruption, resume, retry): same answer, no new call.
     const known = this.answered.get(turnId);
     if (known) return known;
@@ -47,9 +50,18 @@ export class TurnRunner {
       // What the visitor missed of earlier replies goes into the history before the next reply.
       await this.previousPlayout();
       this.settle();
+      // Dropped while waiting: no model call; the visitor's words join the next turn instead.
+      if (signal?.aborted) {
+        this.carried = `${this.carried} ${text}`.trim();
+        return null;
+      }
       if (this.brain.ended) return null;
+      const words = `${this.carried} ${text}`.trim();
+      this.carried = "";
       try {
-        const said = await this.brain.reply(text, turnId);
+        // Once started, a reply runs to the end even if LiveKit drops it (it is never spoken,
+        // and the played-only trim removes it from the history).
+        const said = await this.brain.reply(words, turnId);
         this.replied.add(turnId);
         this.lastReplied = turnId;
         return said;

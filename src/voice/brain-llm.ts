@@ -19,7 +19,7 @@ class BrainStream extends llm.LLMStream {
       .reverse()
       .find((i): i is llm.ChatMessage => i.type === "message" && i.role === "user");
     if (!last) return;
-    const said = await this.turns.handle(last.id, last.textContent ?? "");
+    const said = await this.turns.handle(last.id, last.textContent ?? "", this.abortController.signal);
     if (said) this.queue.put({ id: last.id, delta: { role: "assistant", content: said } });
   }
 }

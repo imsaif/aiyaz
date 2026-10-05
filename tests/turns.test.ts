@@ -238,3 +238,58 @@ describe("TurnRunner waits for the previous reply's playout", () => {
     expect(turns.pendingReports).toBe(0);
   });
 });
+
+describe("TurnRunner and superseded turns", () => {
+  const slowBrain = (ms = 20) => {
+    const brain = {
+      calls: [] as string[],
+      ended: false,
+      async reply(text: string) {
+        brain.calls.push(text);
+        await new Promise((r) => setTimeout(r, ms));
+        return `answer to ${text}`;
+      },
+    };
+    return brain satisfies Brain;
+  };
+
+  it("a turn LiveKit drops before its reply starts is folded into the next turn: one reply, merged text", async () => {
+    const brain = slowBrain();
+    const turns = new TurnRunner(brain);
+    const busy = turns.handle("t0", "earlier question");
+    // Double commit about 500 ms apart while the earlier reply is still running.
+    const first = new AbortController();
+    const dropped = turns.handle("t1", "we sell shoes", first.signal);
+    first.abort();
+    const kept = turns.handle("t2", "to gyms", new AbortController().signal);
+    await Promise.all([busy, dropped, kept]);
+    expect(await dropped).toBeNull();
+    expect(await kept).toBe("answer to we sell shoes to gyms");
+    expect(brain.calls).toEqual(["earlier question", "we sell shoes to gyms"]);
+  });
+
+  it("a turn dropped after its reply started is not answered again with the next turn", async () => {
+    const brain = slowBrain();
+    const turns = new TurnRunner(brain);
+    const first = new AbortController();
+    const started = turns.handle("t1", "we sell shoes", first.signal);
+    await new Promise((r) => setTimeout(r, 5));
+    first.abort();
+    await turns.handle("t2", "to gyms", new AbortController().signal);
+    await started;
+    expect(brain.calls).toEqual(["we sell shoes", "to gyms"]);
+  });
+
+  it("never calls the model for a dropped turn on its own", async () => {
+    const brain = slowBrain();
+    const turns = new TurnRunner(brain);
+    const busy = turns.handle("t0", "earlier");
+    const first = new AbortController();
+    const dropped = turns.handle("t1", "we sell shoes", first.signal);
+    first.abort();
+    await Promise.all([busy, dropped]);
+    expect(brain.calls).toEqual(["earlier"]);
+    expect(await turns.handle("t2", "   ")).toBeNull();
+    expect(brain.calls).toEqual(["earlier"]);
+  });
+});
