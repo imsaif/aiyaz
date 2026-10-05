@@ -14,6 +14,14 @@
 - Tasks 1 to 9 and 13 to 17 (worker part): `~/aiyaz`, worktree `.claude/worktrees/live-voice`, branch `live-voice`.
 - Tasks 10 to 12 and 17 (site part): `~/getaiengineer` (private), new worktree and branch `aiyaz-live-voice` from `main`, created in Task 10 Step 1. The pending `tracking` branch touches `index.html` and `package.json` too; whichever merges second resolves those two files by hand.
 
+## Amendments (Imran, 2026-10-05, after plan review), which override the tasks below
+
+1. **Visitor summary email.** Task 9: after the team email, if the visitor's email is known, also send the visitor an email via Resend, subject "Your call with Aiyaz", body = the same plain-text summary the visitor heard (no internal notes, no cost, no country), followed by the booking link and WhatsApp link. Sender: `Aiyaz <work@getaiengineer.dev>`. Add a test that the visitor email contains the summary and both links and no cost figure. If `RESEND_API_KEY` is missing, log and skip both emails.
+2. **Lead-call email capture.** Task 8 (or wherever `record_notes` is extended): add an optional `visitor_email` field to the `record_notes` tool, validated with the same email check as the token function; Aiyaz asks for it at the end of a lead call to send the summary. The call log (Task 9) stores it, and amendment 1 uses it. Add a unit test that an invalid email is not stored.
+3. **Latency gate.** Task 14: pass when the median time from the visitor finishing a turn to Aiyaz starting to speak is at most 2.5 s, and the 90th percentile at most 3.5 s (Sonnet's measured median is about 2.1 s). Record the numbers in the spike note.
+4. **Execution:** subagent-driven, one fresh implementer and reviewer per task.
+5. **Resend domain.** Before Task 16, Imran verifies getaiengineer.dev in Resend by adding Resend's DNS records at Porkbun (keep the existing MX/TXT forwarding records untouched; Resend uses its own subdomain records).
+
 ## Global Constraints
 
 - **Price by country (one table, two repos):** `AE` gives AED 25,000; any other known country gives USD 6,000 (the site shows `$6,000`); unknown gives AED 25,000. A country is known when, after trim and uppercase, it matches `/^[A-Z]{2}$/`. The aiyaz side is `priceKey()` in `src/config.ts`, the site side is `priceFor()` in `price-core.js`; both are tested against the same table: `AE, ae -> AED`; `IN, US, GB, " in " -> USD`; `"", null, UAE -> AED`.

@@ -85,6 +85,12 @@ pack (how AI initiatives usually stall, no country specifics, no money amounts) 
 - Secrets only in environment variables.
 - Copy: plain English, no em-dashes, no hype words.
 
+## Decisions after plan review (Imran, 2026-10-05)
+
+- Visitors also get their call summary by email (the privacy note already promises it).
+- On lead calls Aiyaz asks for an email at the end and it is stored.
+- Response-time target: median 2.5 s or less, 90th percentile 3.5 s or less.
+
 ## Data
 
 - Kept: visitor email, country, slug, transcript, notes, summary, cost, duration.
@@ -109,7 +115,7 @@ pack (how AI initiatives usually stall, no country specifics, no money amounts) 
   per turn under interruption.
 - Evals: existing personas, plus an India visitor (must say USD 6,000), a lead call with an
   Acme brief, and a silent visitor.
-- Voice spike gates before building the page: round-trip latency under about 1.5 s, clean
+- Voice spike gates before building the page: median response under 2.5 s (90th percentile under 3.5 s), clean
   interruption, no model call on silence.
 - Live check on a preview deploy, then on the site, by Imran from India and someone in the UAE
   if possible.
