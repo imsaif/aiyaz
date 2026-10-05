@@ -36,9 +36,12 @@ it to the worker, which sets:
 
 | Country | Price Aiyaz may say | Market pack |
 |---|---|---|
-| AE (and other GCC) | AED 25,000 | `uae.v1` |
-| IN | USD 6,000 | general (India pack comes with the November India test) |
-| anything else or unknown | AED 25,000 | general |
+| AE | AED 25,000 | `uae.v1` |
+| any other known country | USD 6,000 | general (an India pack comes with the November India test) |
+| unknown | AED 25,000 | `uae.v1` (the UAE test is the current market) |
+
+Imran, 2026-10-05: USD for everyone outside the UAE, at the same USD 6,000 as India. The site's
+price swap changes to match in the same build (task 2).
 
 The price must always match what the site shows that visitor. `prices` in settings becomes a
 map by country; the price guard checks against the visitor's own price. A short `general.v1`
