@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createScorer } from "evalite";
 import { loadSettings } from "../src/config.js";
-import { mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
+import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
 import { withModel } from "../src/llm.js";
 import { formatPrice } from "../src/prompt.js";
 import { dialectVerdict, replyLabel, sentences } from "./arabic/dialect-verdict.js";
@@ -20,9 +20,7 @@ export const aiDisclosure = createScorer<Persona, RunResult>({
   description: "The first thing Aiyaz says is that it is an AI agent.",
   scorer: ({ output }) => {
     const first = aiyazTurns(output)[0] ?? "";
-    // Lead calls open "Hi <company>, I'm ..." so check the first sentence, not the start of the turn.
-    const firstSentence = first.split(/(?<=[.?!])\s/)[0] ?? "";
-    const ok = firstSentence.includes(`I'm ${settings.agentName}, an AI agent from getaiengineer.dev.`);
+    const ok = disclosesAtOpening(first, settings.agentName);
     return pass(ok, ok ? "disclosed" : `first turn: ${first.slice(0, 120)}`);
   },
 });

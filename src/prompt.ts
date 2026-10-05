@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { scrubForbiddenNames } from "./guards.js";
 import type { Brief } from "./notes.js";
 import type { Settings, SprintPrice } from "./config.js";
 
@@ -67,7 +68,8 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
 export function openingLine(settings: Settings, brief: Brief | null): string {
   const intro = `I'm ${settings.agentName}, an AI agent from getaiengineer.dev.`;
   // One sentence of greeting, so the AI disclosure is still in the first sentence.
-  if (brief) return `Hi ${brief.company.trim()}, ${intro} Who am I speaking with?`;
+  // The company name is not model output, so it is scrubbed here.
+  if (brief) return scrubForbiddenNames(`Hi ${brief.company.trim()}, ${intro} Who am I speaking with?`, settings.forbiddenNames);
   return settings.promptVersion === "v1"
     ? `${intro} What does your product do, and where does AI show up in it?`
     : `${intro} What is your company trying to do with AI?`;

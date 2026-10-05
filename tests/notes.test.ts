@@ -31,6 +31,11 @@ describe("visitor name and role in notes", () => {
     expect(n.visitor_name).toBe("Sam Lee");
     expect(n.visitor_role).toBe("CTO");
   });
+  it("are capped at 80 characters and newlines become spaces", () => {
+    const n = applyNotesUpdate(start, { visitor_name: "Sam\nLee\r\nJr", visitor_role: "x".repeat(200) });
+    expect(n.visitor_name).toBe("Sam Lee Jr");
+    expect(n.visitor_role).toHaveLength(80);
+  });
   it("blank values are ignored and never replace a stored one", () => {
     expect(applyNotesUpdate(start, { visitor_name: "   ", visitor_role: "" }).visitor_name).toBeNull();
     const stored = applyNotesUpdate(start, { visitor_name: "Sam", visitor_role: "CTO" });

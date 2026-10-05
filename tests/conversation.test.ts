@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { loadSettings } from "../src/config.js";
+import { disclosesAtOpening } from "../src/guards.js";
 import { Conversation, WRAP_UP } from "../src/conversation.js";
 import { FallbackLLM, FatalLLMError } from "../src/llm.js";
 import { MemoryTracer } from "../src/tracer.js";
@@ -21,7 +22,7 @@ describe("opening", () => {
     const brief = { company: "Acme", facts: [{ text: "launched an AI support bot", source: "https://acme.test" }] };
     const opener = make(new FakeLLM([]), { brief }).start();
     expect(opener).toBe("Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?");
-    expect(opener.split(/(?<=[.?!])\s/)[0]).toContain("an AI agent");
+    expect(disclosesAtOpening(opener, "Aiyaz")).toBe(true);
   });
 });
 

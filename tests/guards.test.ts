@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits } from "../src/guards.js";
+import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits } from "../src/guards.js";
 import { costUsd } from "../src/prices.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 
@@ -137,5 +137,20 @@ describe("notes", () => {
     const n = applyNotesUpdate(emptyNotes(brief), { reject_facts: ["launched an AI support bot"] });
     expect(n.confirmedFacts).toEqual([]);
     expect(n.unconfirmedFacts).toEqual([]);
+  });
+});
+
+describe("disclosesAtOpening", () => {
+  const ai = "I'm Aiyaz, an AI agent from getaiengineer.dev.";
+  it("accepts the plain and the lead opener, including a company ending in a full stop", () => {
+    expect(disclosesAtOpening(`${ai} What is your company trying to do with AI?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Hi Acme, ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Hi Acme Inc., ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);
+  });
+  it("rejects a first turn without it, or with it after another sentence", () => {
+    expect(disclosesAtOpening("Hello there. What does your company do?", "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening(`Hello. ${ai} Who are you?`, "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening(`Hi Acme. Welcome. ${ai}`, "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening("", "Aiyaz")).toBe(false);
   });
 });

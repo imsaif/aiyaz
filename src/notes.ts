@@ -49,6 +49,9 @@ export type NotesUpdate = {
   visitor_role?: string;
 };
 
+// Short, single-line text for fields a model fills from speech.
+const oneLine = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
+
 const addUnique = (list: string[], items: string[] | undefined) => {
   for (const item of items ?? []) {
     const clean = item.trim();
@@ -62,8 +65,8 @@ export function applyNotesUpdate(notes: Notes, update: NotesUpdate): Notes {
   if (update.users?.trim()) next.users = update.users.trim();
   if (update.ai_feature?.trim()) next.aiFeature = update.ai_feature.trim();
   if (update.owner?.trim()) next.owner = update.owner.trim();
-  if (update.visitor_name?.trim()) next.visitor_name = update.visitor_name.trim();
-  if (update.visitor_role?.trim()) next.visitor_role = update.visitor_role.trim();
+  if (oneLine(update.visitor_name)) next.visitor_name = oneLine(update.visitor_name);
+  if (oneLine(update.visitor_role)) next.visitor_role = oneLine(update.visitor_role);
   // Same check as the token function. An invalid value never replaces a stored one.
   const email = typeof update.visitor_email === "string" ? update.visitor_email.trim().toLowerCase() : "";
   if (EMAIL.test(email)) next.visitor_email = email;

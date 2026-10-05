@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { forCountry, loadSettings } from "../src/config.js";
-import { moneyAmounts } from "../src/guards.js";
+import { disclosesAtOpening, moneyAmounts } from "../src/guards.js";
 import { buildSystemPrompt, formatPrice, openingLine } from "../src/prompt.js";
 
 const base = loadSettings();
@@ -41,11 +41,17 @@ describe("v2 prompt", () => {
       "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
     );
   });
+  it("never speaks the forbidden name from a company name", () => {
+    const brief = { company: "Imran's Bakery", facts: [{ text: "x", source: "s" }] };
+    const line = openingLine({ ...v2, forbiddenNames: ["Imran"] }, brief);
+    expect(line).not.toContain("Imran");
+    expect(line).toContain("Hi the team Bakery");
+  });
   it("greets the company by name and asks who is speaking when there is a brief", () => {
     const brief = { company: "  Acme ", facts: [{ text: "launched an AI assistant", source: "s" }] };
     const line = openingLine(v2, brief);
     expect(line).toBe("Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?");
-    expect(line.split(/(?<=[.?!])\s/)[0]).toContain("an AI agent");
+    expect(disclosesAtOpening(line, "Aiyaz")).toBe(true);
     expect(line).not.toContain("I read that");
   });
 });

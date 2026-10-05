@@ -13,6 +13,17 @@ export function scrubForbiddenNames(text: string, names: string[]): string {
   return out;
 }
 
+// True when the first turn says it is an AI agent before anything else: either it
+// opens with the disclosure, or only a "Hi <company>, " greeting comes first.
+// A company name may end in a full stop ("Acme Inc."), so sentences are not split on it.
+export function disclosesAtOpening(first: string, agentName: string): boolean {
+  const line = `I'm ${agentName}, an AI agent from getaiengineer.dev.`;
+  const at = first.indexOf(line);
+  if (at < 0) return false;
+  const before = first.slice(0, at);
+  return before === "" || (/^Hi [^?!]{1,80}, $/.test(before) && !before.includes(". "));
+}
+
 export function mentionsForbiddenName(text: string, names: string[]): boolean {
   return names.some((n) => new RegExp(`\\b${escape(n)}\\b`, "i").test(text));
 }
