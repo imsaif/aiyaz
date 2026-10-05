@@ -31,6 +31,11 @@ export type Settings = {
   maxOutputTokens: number;
   forbiddenNames: string[];
   traceFile: string;
+  summaryTo: string;
+  summaryFrom: string;
+  transcriptDays: number;
+  // Deepgram + TTS estimate per call minute, counted in the daily total. Measured in the voice spike.
+  voiceUsdPerMinute: number;
 };
 
 const env = (key: string, fallback: string) => process.env[key] ?? fallback;
@@ -117,5 +122,10 @@ export function loadSettings(): Settings {
     maxOutputTokens: num("AIYAZ_MAX_OUTPUT_TOKENS", 1024),
     forbiddenNames: ["Imran"],
     traceFile: env("AIYAZ_TRACE_FILE", "traces.jsonl"),
+    summaryTo: env("AIYAZ_SUMMARY_TO", ""),
+    summaryFrom: env("AIYAZ_SUMMARY_FROM", "Aiyaz <work@getaiengineer.dev>"),
+    // Spec assumption, Imran to confirm.
+    transcriptDays: num("AIYAZ_TRANSCRIPT_DAYS", 30),
+    voiceUsdPerMinute: num("AIYAZ_VOICE_USD_PER_MIN", 0.05),
   };
 }
