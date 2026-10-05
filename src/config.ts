@@ -83,7 +83,7 @@ export function forCountry(settings: Settings, country: string | null | undefine
 export function loadSettings(): Settings {
   return {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
-    promptVersion: env("AIYAZ_PROMPT_VERSION", "v2"),
+    promptVersion: env("AIYAZ_PROMPT_VERSION", "v3"),
     // The unknown visitor until forCountry() is applied.
     sprintPrice: PRICES.unknown,
     knowledgePack: packsFromEnv().unknown,

@@ -18,6 +18,9 @@ const GULF_ARABIC = [
   "- If they switch language, switch with them.",
 ].join("\n");
 
+// How the prompt places the caller. A pack with no entry gets no place name.
+const MARKET_WHERE: Record<string, string> = { "uae.v1": " in the UAE" };
+
 export function formatPrice(price: SprintPrice): string {
   return `${price.currency} ${price.amount.toLocaleString("en-US")}`;
 }
@@ -41,7 +44,12 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
     .replaceAll("{{sprintPrice}}", formatPrice(settings.sprintPrice))
     .replaceAll("{{briefSection}}", briefSection)
     .replaceAll("{{knowledgeSection}}", pack)
-    .replaceAll("{{languageRule}}", settings.arabicEnabled ? GULF_ARABIC : ENGLISH_ONLY);
+    .replaceAll("{{marketWhere}}", settings.knowledgePack ? (MARKET_WHERE[settings.knowledgePack] ?? "") : "")
+    // The Gulf Arabic rule quotes the AED price, so it only applies to AED visitors.
+    .replaceAll(
+      "{{languageRule}}",
+      settings.arabicEnabled && settings.sprintPrice.currency === "AED" ? GULF_ARABIC : ENGLISH_ONLY,
+    );
   const packTag = settings.knowledgePack ? `+${settings.knowledgePack}` : "";
   return { text, id: `${PROMPT_NAME}/${settings.promptVersion}${packTag}@${sha8}` };
 }

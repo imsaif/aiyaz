@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { loadSettings } from "../src/config.js";
+import { forCountry, loadSettings } from "../src/config.js";
 import { moneyAmounts } from "../src/guards.js";
 import { buildSystemPrompt, formatPrice, openingLine } from "../src/prompt.js";
 
@@ -16,14 +16,6 @@ describe("system prompt", () => {
     expect(withPack.id).toMatch(/^system\/v\d\+uae\.v1@[0-9a-f]{8}$/);
     expect(without.id).toMatch(/^system\/v\d@[0-9a-f]{8}$/);
     expect(withPack.id.split("@")[1]).not.toBe(without.id.split("@")[1]);
-  });
-  it("the pack contains no money amounts", () => {
-    const pack = readFileSync(new URL("../prompts/knowledge/uae.v1.md", import.meta.url), "utf8");
-    expect(moneyAmounts(pack)).toEqual([]);
-  });
-  it("the pack gives no language instruction, so it cannot override the Arabic switch", () => {
-    const pack = readFileSync(new URL("../prompts/knowledge/uae.v1.md", import.meta.url), "utf8");
-    expect(pack).not.toMatch(/answer in|reply in/i);
   });
   it("leaves no unfilled placeholders", () => {
     const p = buildSystemPrompt(base, null);
@@ -75,5 +67,68 @@ describe("Arabic switch", () => {
   });
   it("defaults to off", () => {
     expect(base.arabicEnabled).toBe(false);
+  });
+});
+
+describe("market packs", () => {
+  const dir = new URL("../prompts/knowledge/", import.meta.url);
+  const packs = readdirSync(dir).filter((f) => f.endsWith(".md"));
+  it("include the general pack", () => {
+    expect(packs).toContain("general.v1.md");
+  });
+  for (const file of packs) {
+    const text = readFileSync(new URL(file, dir), "utf8");
+    it(`${file} contains no money amounts`, () => {
+      expect(moneyAmounts(text)).toEqual([]);
+    });
+    it(`${file} gives no language instruction, so it cannot override the Arabic switch`, () => {
+      expect(text).not.toMatch(/answer in|reply in/i);
+    });
+  }
+  it("the general pack names no country or region", () => {
+    const text = readFileSync(new URL("general.v1.md", dir), "utf8");
+    expect(text).not.toMatch(/UAE|Dubai|Emirat|India|Gulf|Saudi|AED|USD/);
+  });
+});
+
+describe("v3 prompt by country", () => {
+  it("is the default version", () => {
+    expect(base.promptVersion).toBe("v3");
+  });
+  it("an India visitor gets USD 6,000, the general pack and no UAE framing", () => {
+    const p = buildSystemPrompt(forCountry(base, "IN"), null);
+    expect(p.id).toMatch(/^system\/v3\+general\.v1@[0-9a-f]{8}$/);
+    expect(p.text).toContain("fixed price USD 6,000");
+    expect(p.text).toContain("General context");
+    expect(p.text).not.toMatch(/AED|UAE|Dubai/);
+  });
+  it("a UAE visitor and an unknown visitor get AED 25,000 and the UAE pack", () => {
+    for (const c of ["AE", null]) {
+      const p = buildSystemPrompt(forCountry(base, c), null);
+      expect(p.text).toContain("a company in the UAE");
+      expect(p.text).toContain("UAE market context");
+      expect(p.text).toContain("fixed price AED 25,000");
+    }
+  });
+  it("leaves no unfilled placeholders for any country", () => {
+    for (const c of ["IN", "AE", null]) {
+      expect(buildSystemPrompt(forCountry(base, c), null).text).not.toMatch(/\{\{\w+\}\}/);
+    }
+  });
+  it("asks for the spoken reply in the same message as record_notes", () => {
+    expect(buildSystemPrompt(base, null).text).toContain("in the same message as the tool call");
+  });
+  it("wraps up after two silent turns", () => {
+    expect(buildSystemPrompt(base, null).text).toContain('"(no answer)" twice in a row');
+  });
+  it("keeps English only for a USD visitor even with the Arabic switch on", () => {
+    const p = buildSystemPrompt({ ...forCountry(base, "IN"), arabicEnabled: true }, null);
+    expect(p.text).toContain("you can only continue in English for now");
+    expect(p.text).not.toContain("Gulf (Khaleeji) Arabic");
+  });
+  it("opens like v2", () => {
+    expect(openingLine(base, null)).toBe(
+      "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
+    );
   });
 });
