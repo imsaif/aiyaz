@@ -220,6 +220,41 @@ describe("limits", () => {
     expect(c.endReason).toBe("cost_limit");
   });
 
+  it("counts the voice estimate towards the cost cap", async () => {
+    let t = 0;
+    const llm = new FakeLLM([[text("Tell me more.")]]);
+    const c = make(llm, { settings: { ...settings, costCapUsd: 1, voiceUsdPerMinute: 1 }, now: () => t });
+    c.start();
+    // USD 0.998 of voice so far: under the cap until this turn's Claude cost is added.
+    t = 59_900;
+    expect(await c.reply("hi")).toBe(`Tell me more. ${WRAP_UP.cost_limit}`);
+    expect(c.endReason).toBe("cost_limit");
+    expect(c.costUsd).toBeLessThan(0.1);
+  });
+
+  it("ends with the cost line before calling the model when voice alone is over the cap", async () => {
+    let t = 0;
+    const llm = new FakeLLM([[text("first")], [text("second")]]);
+    const c = make(llm, { settings: { ...settings, costCapUsd: 1, voiceUsdPerMinute: 0.2 }, now: () => t });
+    c.start();
+    t = 60_000;
+    expect(await c.reply("hi")).toBe("first");
+    t = 5 * 60_000 + 1;
+    expect(await c.reply("still here")).toBe(WRAP_UP.cost_limit);
+    expect(llm.requests).toHaveLength(1);
+    expect(c.endReason).toBe("cost_limit");
+  });
+
+  it("with no voice rate, only Claude's cost counts, however long the call", async () => {
+    let t = 0;
+    const llm = new FakeLLM([[text("Who uses it?")]]);
+    const c = make(llm, { settings: { ...settings, costCapUsd: 1, voiceUsdPerMinute: 0 }, now: () => t });
+    c.start();
+    t = 9 * 60_000;
+    expect(await c.reply("hi")).toBe("Who uses it?");
+    expect(c.ended).toBe(false);
+  });
+
   it("truncates very long input", async () => {
     const llm = new FakeLLM([[text("ok")]]);
     const c = make(llm, { settings: { ...settings, maxInputChars: 10 } });

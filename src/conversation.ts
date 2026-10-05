@@ -112,6 +112,7 @@ export class Conversation {
 
     if (this.now() - this.startedAt > this.settings.maxSeconds * 1000) return this.finish("time_limit");
     if (this.prospectTurns > this.settings.maxTurns) return this.finish("turn_limit");
+    if (this.overCostCap()) return this.finish("cost_limit");
 
     // Tool results deferred from the previous turn must lead the next user message.
     this.messages.push(
@@ -200,7 +201,7 @@ export class Conversation {
         this.endReason = "agent_ended";
         break;
       }
-      if (this.costUsd >= this.settings.costCapUsd) return this.finish("cost_limit", spoken);
+      if (this.overCostCap()) return this.finish("cost_limit", spoken);
       if (round === this.settings.maxToolRounds - 1) {
         // Keep the history valid: an assistant turn must follow the tool results.
         this.messages.push({ role: "assistant", content: TOOL_ROUND_FALLBACK });
@@ -208,7 +209,7 @@ export class Conversation {
       }
     }
 
-    if (!this.ended && this.costUsd >= this.settings.costCapUsd) return this.finish("cost_limit", spoken);
+    if (!this.ended && this.overCostCap()) return this.finish("cost_limit", spoken);
 
     const said = spoken.join(" ") || TOOL_ROUND_FALLBACK;
     this.transcript.push({ role: "aiyaz", text: said });
@@ -220,6 +221,13 @@ export class Conversation {
   end(reason: Exclude<EndReason, "agent_ended">): string {
     if (this.ended) return "";
     return this.finish(reason);
+  }
+
+  // The per-call cap covers the whole call: Claude so far plus the voice estimate for the minutes used.
+  // costUsd stays Claude only, because the call log adds the voice cost itself.
+  private overCostCap(): boolean {
+    const minutes = (this.now() - this.startedAt) / 60_000;
+    return this.costUsd + minutes * this.settings.voiceUsdPerMinute >= this.settings.costCapUsd;
   }
 
   private finish(reason: Exclude<EndReason, "agent_ended">, spoken: string[] = []): string {
