@@ -265,14 +265,16 @@ export class Conversation {
         }
         return { type: "tool_result", tool_use_id: tool.id, content: `Unknown tool ${tool.name}`, is_error: true };
       });
-      // Voice latency: when this response already asks the next question and only saved
-      // notes, speak now and send the tool results with the next user message.
+      // Voice latency: when this response already holds the reply and only saved notes,
+      // speak now and send the tool results with the next user message.
       // A bare "Got it." would leave the visitor in silence, so it still gets a second call.
       const saidThisRound = message.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text.trim())
         .join(" ");
-      if (saidThisRound.includes("?") && toolUses.every((t) => t.name === "record_notes")) {
+      // A question, or a full sentence of at least six words, is a reply on its own.
+      const isReply = saidThisRound.includes("?") || saidThisRound.split(/\s+/).filter(Boolean).length >= 6;
+      if (isReply && toolUses.every((t) => t.name === "record_notes")) {
         this.pendingResults = results;
         break;
       }

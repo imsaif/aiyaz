@@ -67,6 +67,17 @@ describe("a turn", () => {
     expect(blocks[1]!.text).toBe("small teams");
   });
 
+  it("speaks a full sentence that came with record_notes without a second model call, even with no question", async () => {
+    const llm = new FakeLLM([
+      [text("That sounds like a busy market for small shops."), tool("record_notes", { product: "an invoicing app" })],
+    ]);
+    const c = make(llm);
+    c.start();
+    expect(await c.reply("We make an invoicing app.")).toBe("That sounds like a busy market for small shops.");
+    expect(llm.requests).toHaveLength(1);
+    expect(c.notes.product).toBe("an invoicing app");
+  });
+
   it("still makes a second call when record_notes came with no text", async () => {
     const llm = new FakeLLM([[tool("record_notes", { product: "a" })], [text("Who uses it?")]]);
     const c = make(llm);

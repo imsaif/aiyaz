@@ -133,6 +133,10 @@ describe("v3 prompt by country", () => {
     expect(p.text).toContain("you can only continue in English for now");
     expect(p.text).not.toContain("Gulf (Khaleeji) Arabic");
   });
+  it("tells Aiyaz to speak first and never send record_notes on its own", () => {
+    const p = buildSystemPrompt(base, null);
+    expect(p.text).toContain("Never send `record_notes` without a spoken reply.");
+  });
   it("tells Aiyaz never to say the website address aloud", () => {
     const p = buildSystemPrompt(base, null);
     expect(p.text).toContain('Never say the website address aloud; say "the team" or "us" instead.');
