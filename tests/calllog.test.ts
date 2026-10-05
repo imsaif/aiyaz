@@ -30,7 +30,7 @@ const notes = applyNotesUpdate(emptyNotes(brief), {
   reject_facts: ["import customers from a CRM"],
 });
 const transcript = [
-  { role: "aiyaz" as const, text: "I'm Aiyaz, an AI agent from getaiengineer.dev." },
+  { role: "aiyaz" as const, text: "I'm Aiyaz, an AI agent." },
   { role: "prospect" as const, text: "We make an invoicing app." },
   { role: "aiyaz" as const, text: "My guess is the assistant reads dates from the wrong field." },
 ];

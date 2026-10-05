@@ -66,7 +66,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null): Buil
 
 // Said by code, never by the model, so the AI disclosure is guaranteed.
 export function openingLine(settings: Settings, brief: Brief | null): string {
-  const intro = `I'm ${settings.agentName}, an AI agent from getaiengineer.dev.`;
+  const intro = `I'm ${settings.agentName}, an AI agent.`;
   // One sentence of greeting, so the AI disclosure is still in the first sentence.
   // The company name is not model output, so it is scrubbed here.
   if (brief) return scrubForbiddenNames(`Hi ${brief.company.trim()}, ${intro} Who am I speaking with?`, settings.forbiddenNames);

@@ -3276,7 +3276,7 @@ Expected: the worker logs that it registered with LiveKit as agent `aiyaz`.
 - [ ] **Step 5: Time cap.** Connect once more and say nothing for 2 minutes (the worker runs with `AIYAZ_MAX_SECONDS=120`).
 
 - [ ] **Step 6: Check the gates** (write each result in the commit message):
-- **G1** The opener is spoken word for word. Homepage call (dev token only): it starts "I'm Aiyaz, an AI agent from getaiengineer.dev." Lead call: it is exactly "Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?", and the Acme fact comes later as a question, never as a statement.
+- **G1** The opener is spoken word for word. Homepage call (dev token only): it starts "I'm Aiyaz, an AI agent." Lead call: it is exactly "Hi Acme, I'm Aiyaz, an AI agent. Who am I speaking with?", and the Acme fact comes later as a question, never as a statement.
 - **G2** Price: in the India call, Aiyaz's caption text says "USD 6,000" (or "$6,000") when asked, and never AED.
 - **G3** `reply()` once per turn: the number of `"role":"conversation"` lines added to `traces.jsonl` per call equals the visitor turns, plus at most one extra per turn where the reply had no question.
 - **G4** Latency: median of the `[latency]` lines. Spec target about 1,500 ms. If the median is over 1,500 ms, stop and report the numbers to Imran with the two options measured: `AIYAZ_CONVERSATION_MODEL=claude-haiku-4-5` (one more run), and keeping Sonnet. Do not change the default model without his answer.
@@ -3542,7 +3542,7 @@ git commit -m "Deploy the Aiyaz voice worker to Fly.io (Mumbai, no public port)"
 - [ ] **Step 7: Preview checks** (pass/fail, written down for Imran). Every live call goes through the lead link, and one IP gets 3 calls a day, so keep to this order: call 1 covers the opener, the price question, one interruption, 20 s of silence and closing the tab; call 2 is the worker-down check (the token is minted, so it counts); call 3 any repeat; the 4th-call limit check comes last. Do the phone check on mobile data (a different IP).
 - `GET <preview>/node_modules/livekit-server-sdk/package.json` returns 404, and `<preview>/tests/price.test.js` returns 404.
 - A visitor without a lead link (plain `<preview>/`) still sees "Play example" and no live call or email step. From India, the hero and price card show `$6,000`. Ideally someone in the UAE checks AED 25,000.
-- Lead call `<preview>/?ref=acme-test`: the card says "Talk to Aiyaz about Acme", no email asked, and the opener is exactly "Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?". From India, Aiyaz says USD 6,000 when asked the price.
+- Lead call `<preview>/?ref=acme-test`: the card says "Talk to Aiyaz about Acme", no email asked, and the opener is exactly "Hi Acme, I'm Aiyaz, an AI agent. Who am I speaking with?". From India, Aiyaz says USD 6,000 when asked the price.
 - Fourth lead call from the same IP in one day: the card shows the limit message with Book and WhatsApp.
 - Microphone blocked on the lead link: the agreed microphone message with Book and WhatsApp.
 - Worker down: `fly scale count 0`, start a lead call; within about 15 s the card shows "The call could not start..." with Book and WhatsApp. Then `fly scale count 1`.

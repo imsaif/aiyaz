@@ -17,7 +17,7 @@ export function scrubForbiddenNames(text: string, names: string[]): string {
 // opens with the disclosure, or only a "Hi <company>, " greeting comes first.
 // A company name may end in a full stop ("Acme Inc."), so sentences are not split on it.
 export function disclosesAtOpening(first: string, agentName: string): boolean {
-  const line = `I'm ${agentName}, an AI agent from getaiengineer.dev.`;
+  const line = `I'm ${agentName}, an AI agent.`;
   const at = first.indexOf(line);
   if (at < 0) return false;
   const before = first.slice(0, at);

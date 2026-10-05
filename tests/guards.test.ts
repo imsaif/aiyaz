@@ -141,7 +141,7 @@ describe("notes", () => {
 });
 
 describe("disclosesAtOpening", () => {
-  const ai = "I'm Aiyaz, an AI agent from getaiengineer.dev.";
+  const ai = "I'm Aiyaz, an AI agent.";
   it("accepts the plain and the lead opener, including a company ending in a full stop", () => {
     expect(disclosesAtOpening(`${ai} What is your company trying to do with AI?`, "Aiyaz")).toBe(true);
     expect(disclosesAtOpening(`Hi Acme, ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);

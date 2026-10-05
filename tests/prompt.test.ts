@@ -38,7 +38,7 @@ describe("v2 prompt", () => {
   });
   it("opens by asking what the company wants to do with AI", () => {
     expect(openingLine(v2, null)).toBe(
-      "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
+      "I'm Aiyaz, an AI agent. What is your company trying to do with AI?",
     );
   });
   it("never speaks the forbidden name from a company name", () => {
@@ -50,7 +50,7 @@ describe("v2 prompt", () => {
   it("greets the company by name and asks who is speaking when there is a brief", () => {
     const brief = { company: "  Acme ", facts: [{ text: "launched an AI assistant", source: "s" }] };
     const line = openingLine(v2, brief);
-    expect(line).toBe("Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?");
+    expect(line).toBe("Hi Acme, I'm Aiyaz, an AI agent. Who am I speaking with?");
     expect(disclosesAtOpening(line, "Aiyaz")).toBe(true);
     expect(line).not.toContain("I read that");
   });
@@ -133,9 +133,13 @@ describe("v3 prompt by country", () => {
     expect(p.text).toContain("you can only continue in English for now");
     expect(p.text).not.toContain("Gulf (Khaleeji) Arabic");
   });
+  it("tells Aiyaz never to say the website address aloud", () => {
+    const p = buildSystemPrompt(base, null);
+    expect(p.text).toContain('Never say the website address aloud; say "the team" or "us" instead.');
+  });
   it("opens like v2", () => {
     expect(openingLine(base, null)).toBe(
-      "I'm Aiyaz, an AI agent from getaiengineer.dev. What is your company trying to do with AI?",
+      "I'm Aiyaz, an AI agent. What is your company trying to do with AI?",
     );
   });
 });
