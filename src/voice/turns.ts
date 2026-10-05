@@ -1,11 +1,19 @@
 // One visitor turn, one reply() call. LiveKit decides when a turn is finished; this makes
 // sure each finished turn reaches the stateful brain exactly once, one at a time, in order.
 
-export type Brain = { reply(text: string): Promise<string>; readonly ended: boolean };
+export type Brain = {
+  reply(text: string, turnId?: string): Promise<string>;
+  // The reply for turnId was cut off and the visitor heard only `played` ("" for nothing).
+  heard?(turnId: string, played: string): void;
+  readonly ended: boolean;
+};
 
 export class TurnRunner {
   private tail: Promise<unknown> = Promise.resolve();
   private readonly answered = new Map<string, Promise<string | null>>();
+  private readonly replied = new Set<string>();
+  private readonly cutOff = new Map<string, string>();
+  private readonly reported = new Set<string>();
 
   constructor(private readonly brain: Brain) {}
 
@@ -16,11 +24,38 @@ export class TurnRunner {
     const text = heard.trim();
     // Silence or noise: say nothing and spend nothing.
     if (!text) return Promise.resolve(null);
-    const run = () => (this.brain.ended ? Promise.resolve(null) : this.brain.reply(text));
+    const run = async () => {
+      // What the visitor missed of earlier replies goes into the history before the next reply.
+      this.settle();
+      if (this.brain.ended) return null;
+      const said = await this.brain.reply(text, turnId);
+      this.replied.add(turnId);
+      return said;
+    };
     const answer = this.tail.then(run, run);
     this.tail = answer.catch(() => undefined);
     this.answered.set(turnId, answer);
     return answer;
+  }
+
+  // LiveKit cut the reply to turnId off after `played`. Applied once, after that reply is done.
+  played(turnId: string, played: string): void {
+    const answer = this.answered.get(turnId);
+    if (!answer || this.reported.has(turnId)) return;
+    this.reported.add(turnId);
+    this.cutOff.set(turnId, played);
+    void answer.then(
+      () => this.settle(),
+      () => undefined,
+    );
+  }
+
+  private settle(): void {
+    for (const [turnId, played] of this.cutOff) {
+      if (!this.replied.has(turnId)) continue;
+      this.cutOff.delete(turnId);
+      this.brain.heard?.(turnId, played);
+    }
   }
 }
 

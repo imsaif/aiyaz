@@ -293,3 +293,68 @@ describe("fallback", () => {
     expect(c.endReason).toBe("error");
   }, 10_000);
 });
+
+describe("what the visitor actually heard", () => {
+  const lastAssistantText = (llm: FakeLLM) => {
+    const msgs = llm.requests.at(-1)!.messages;
+    return msgs.filter((m) => m.role === "assistant").map((m) =>
+      typeof m.content === "string" ? m.content : m.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" "),
+    );
+  };
+  const allText = (llm: FakeLLM) => JSON.stringify(llm.requests.at(-1)!.messages);
+
+  it("keeps only the played part of a cut-off reply, in the history and the transcript", async () => {
+    const llm = new FakeLLM([[text("We build AI systems for support teams. What does Acme sell?")], [text("Who uses it?")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("Tell me about you.", "turn-1");
+    c.heard("turn-1", "We build AI systems");
+    await c.reply("We sell shoes.", "turn-2");
+    expect(allText(llm)).not.toContain("What does Acme sell?");
+    expect(lastAssistantText(llm)).toContain("We build AI systems");
+    expect(allText(llm)).toContain("The prospect cut you off");
+    expect(c.transcript.map((t) => t.text)).not.toContain("We build AI systems for support teams. What does Acme sell?");
+    expect(c.transcript.find((t) => t.text === "We build AI systems")).toEqual({ role: "aiyaz", text: "We build AI systems", interrupted: true });
+  });
+
+  it("drops a reply that was cut off before any of it played", async () => {
+    const llm = new FakeLLM([[text("A long answer the visitor never heard.")], [text("Go on.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("First part.", "turn-1");
+    c.heard("turn-1", "");
+    await c.reply("Second part.", "turn-2");
+    expect(allText(llm)).not.toContain("never heard");
+    expect(allText(llm)).toContain("First part.");
+    expect(allText(llm)).toContain("before they heard your last reply");
+    expect(c.transcript.some((t) => t.text.includes("never heard"))).toBe(false);
+  });
+
+  it("keeps the notes tool call of a cut-off reply, so the history stays valid", async () => {
+    const llm = new FakeLLM([
+      [text("Got it. Who uses it day to day?"), tool("record_notes", { product: "an invoicing app" })],
+      [text("Thanks.")],
+    ]);
+    const c = make(llm);
+    c.start();
+    await c.reply("We make an invoicing app.", "turn-1");
+    c.heard("turn-1", "");
+    await c.reply("Accountants.", "turn-2");
+    const msgs = llm.requests.at(-1)!.messages;
+    expect(JSON.stringify(msgs)).toContain("tool_use");
+    expect(JSON.stringify(msgs)).toContain("tool_result");
+    expect(JSON.stringify(msgs)).not.toContain("Who uses it day to day?");
+    expect(c.notes.product).toBe("an invoicing app");
+  });
+
+  it("ignores an unknown turn and a second report for the same turn", async () => {
+    const llm = new FakeLLM([[text("One two three.")], [text("Ok.")]]);
+    const c = make(llm);
+    c.start();
+    await c.reply("Hi.", "turn-1");
+    c.heard("nope", "");
+    c.heard("turn-1", "One two");
+    c.heard("turn-1", "");
+    expect(c.transcript.at(-1)).toEqual({ role: "aiyaz", text: "One two", interrupted: true });
+  });
+});

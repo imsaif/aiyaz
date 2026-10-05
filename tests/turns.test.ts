@@ -124,3 +124,45 @@ describe("makeHangUp", () => {
     expect(shutdown).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("TurnRunner and what was heard", () => {
+  const recorder = (ms = 5) => {
+    const log: string[] = [];
+    const brain = {
+      ended: false,
+      async reply(text: string, turnId?: string) {
+        log.push(`reply ${turnId} start`);
+        await new Promise((r) => setTimeout(r, ms));
+        log.push(`reply ${turnId} done`);
+        return `answer to ${text}`;
+      },
+      heard(turnId: string, played: string) {
+        log.push(`heard ${turnId} "${played}"`);
+      },
+    };
+    return { brain: brain satisfies Brain, log };
+  };
+
+  it("applies a cut-off report after that turn's reply and before the next reply", async () => {
+    const { brain, log } = recorder();
+    const turns = new TurnRunner(brain);
+    const first = turns.handle("t1", "one");
+    const second = turns.handle("t2", "two");
+    turns.played("t1", "ans");
+    await Promise.all([first, second]);
+    expect(log).toEqual(['reply t1 start', 'reply t1 done', 'heard t1 "ans"', 'reply t2 start', 'reply t2 done']);
+  });
+
+  it("reports once per turn, and never for a turn the brain did not answer", async () => {
+    const { brain, log } = recorder();
+    const turns = new TurnRunner(brain);
+    await turns.handle("t1", "one");
+    turns.played("t1", "a");
+    turns.played("t1", "b");
+    turns.played("silent", "");
+    await turns.handle("t2", "   ");
+    turns.played("t2", "");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(log.filter((l) => l.startsWith("heard"))).toEqual(['heard t1 "a"']);
+  });
+});

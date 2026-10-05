@@ -1,6 +1,6 @@
 // The Aiyaz voice worker: LiveKit hears and speaks, the Conversation decides what to say.
 // Local: pnpm voice:dev      Fly.io: pnpm voice:start
-import { type JobContext, type JobProcess, ServerOptions, cli, defineAgent, voice } from "@livekit/agents";
+import { type JobContext, type JobProcess, ServerOptions, cli, defineAgent, type llm, voice } from "@livekit/agents";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
@@ -17,6 +17,7 @@ import { JsonlTracer } from "../tracer.js";
 import { BrainLLM } from "./brain-llm.js";
 import { hideSpokenTextInLibraryLogs } from "./log-redact.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
+import { PlayoutTracker } from "./playout.js";
 import { SESSION_TURN_HANDLING, sessionErrorLine } from "./session-setup.js";
 import { makeHangUp, startCallTimer } from "./turns.js";
 
@@ -27,6 +28,16 @@ function makeTts(s: Settings) {
         ...(s.ttsVoiceId ? { voiceId: s.ttsVoiceId } : {}),
         ...(s.ttsModel ? { model: s.ttsModel } : {}),
       });
+}
+
+// Notes each finished visitor turn, so its reply's playout can be linked back to it.
+class AiyazAgent extends voice.Agent {
+  constructor(private readonly playout: PlayoutTracker) {
+    super({ instructions: "" });
+  }
+  override async onUserTurnCompleted(_chatCtx: llm.ChatContext, newMessage: llm.ChatMessage): Promise<void> {
+    this.playout.userTurn(newMessage.id);
+  }
 }
 
 export default defineAgent({
@@ -48,11 +59,15 @@ export default defineAgent({
       brief,
     });
 
+    const brainLlm = new BrainLLM(brain);
+    // A reply the visitor cut off is trimmed to what they heard, in the history and the transcript.
+    const playout = new PlayoutTracker((turnId, played) => brainLlm.turns.played(turnId, played));
+
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
       stt: new deepgram.STT({ model: "nova-3" }),
       tts: makeTts(settings),
-      llm: new BrainLLM(brain),
+      llm: brainLlm,
       ttsTextTransforms: ["filter_markdown", "filter_emoji"],
       turnHandling: SESSION_TURN_HANDLING,
     });
@@ -63,6 +78,7 @@ export default defineAgent({
       if (ev.isFinal) heardAt = Date.now();
     });
 
+    session.on(voice.AgentSessionEventTypes.SpeechCreated, (ev) => playout.speechCreated(ev));
     // The library logs these only when it gives up on the session; we want every one.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => console.error(sessionErrorLine(brain.id, ev)));
 
@@ -118,7 +134,7 @@ export default defineAgent({
     });
 
     // record: LiveKit Cloud session reports carry transcript and audio, so they stay off by default.
-    await session.start({ agent: new voice.Agent({ instructions: "" }), room: ctx.room, record: settings.livekitRecord });
+    await session.start({ agent: new AiyazAgent(playout), room: ctx.room, record: settings.livekitRecord });
     // Fixed text from code: the AI disclosure never depends on the model.
     session.say(brain.start(), { allowInterruptions: false });
   },

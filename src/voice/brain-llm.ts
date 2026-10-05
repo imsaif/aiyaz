@@ -25,7 +25,8 @@ class BrainStream extends llm.LLMStream {
 }
 
 export class BrainLLM extends llm.LLM {
-  private readonly turns: TurnRunner;
+  // Public so the worker can report replies the visitor cut off.
+  readonly turns: TurnRunner;
 
   constructor(brain: Brain) {
     super();

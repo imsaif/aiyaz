@@ -9,7 +9,8 @@ import { buildSystemPrompt, openingLine, type BuiltPrompt } from "./prompt.js";
 import type { Tracer } from "./tracer.js";
 
 export type EndReason = "agent_ended" | "time_limit" | "turn_limit" | "cost_limit" | "error";
-export type Turn = { role: "aiyaz" | "prospect"; text: string };
+// interrupted: the visitor cut Aiyaz off, and text is only the part they heard.
+export type Turn = { role: "aiyaz" | "prospect"; text: string; interrupted?: boolean };
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -53,6 +54,11 @@ export const WRAP_UP: Record<Exclude<EndReason, "agent_ended">, string> = {
   error: "Something went wrong on my side, so I have to stop here. The team will follow up with you.",
 };
 const TOOL_ROUND_FALLBACK = "Could you tell me a little more about that?";
+const CUT_OFF_NOTE = "(The prospect cut you off. They heard only the part of your last reply shown above.)";
+const CUT_OFF_SILENT_NOTE = "(The prospect cut you off before they heard your last reply.)";
+
+// What one reply added, so it can be trimmed to what the visitor heard.
+type ReplyRecord = { assistant: Anthropic.MessageParam[]; turn: Turn | undefined; settled: boolean };
 
 export type ConversationDeps = {
   settings: Settings;
@@ -81,6 +87,12 @@ export class Conversation {
   private prospectTurns = 0;
   // Tool results from a turn that was spoken without a second model call.
   private pendingResults: Anthropic.ToolResultBlockParam[] = [];
+  // Replies by visitor turn id, and cut-off reports that arrived while a reply was running.
+  private readonly replies = new Map<string, ReplyRecord>();
+  private readonly heardLater: [string, string][] = [];
+  private replying = false;
+  // Tells the model, with the next visitor message, that its last reply was cut off.
+  private cutOffNote: string | null = null;
 
   constructor(deps: ConversationDeps) {
     this.settings = deps.settings;
@@ -102,7 +114,58 @@ export class Conversation {
     return opener;
   }
 
-  async reply(prospectText: string): Promise<string> {
+  // turnId names the visitor turn, so heard() can later trim this reply to what was played.
+  async reply(prospectText: string, turnId?: string): Promise<string> {
+    const firstMessage = this.messages.length;
+    const firstTurn = this.transcript.length;
+    this.replying = true;
+    try {
+      const said = await this.answer(prospectText);
+      if (turnId !== undefined) {
+        this.replies.set(turnId, {
+          assistant: this.messages.slice(firstMessage).filter((m) => m.role === "assistant"),
+          turn: this.transcript.slice(firstTurn).find((t) => t.role === "aiyaz"),
+          settled: false,
+        });
+      }
+      return said;
+    } finally {
+      this.replying = false;
+      for (const [id, played] of this.heardLater.splice(0)) this.heard(id, played);
+    }
+  }
+
+  // The visitor cut off the reply to turnId and heard only `played` ("" for nothing). The model
+  // history and the transcript keep only that, so unheard words never count as said.
+  heard(turnId: string, played: string): void {
+    if (this.replying) {
+      this.heardLater.push([turnId, played]);
+      return;
+    }
+    const record = this.replies.get(turnId);
+    if (!record || record.settled) return;
+    record.settled = true;
+    const kept = played.trim();
+    let placed = false;
+    for (const message of record.assistant) {
+      // Tool calls stay, so every tool result still has its call.
+      const blocks: Anthropic.ContentBlockParam[] =
+        typeof message.content === "string" ? [] : message.content.filter((b) => b.type !== "text");
+      if (!placed && kept) {
+        blocks.unshift({ type: "text", text: kept });
+        placed = true;
+      }
+      if (blocks.length) message.content = blocks;
+      else this.messages.splice(this.messages.indexOf(message), 1);
+    }
+    if (record.turn) {
+      if (kept) Object.assign(record.turn, { text: kept, interrupted: true });
+      else this.transcript.splice(this.transcript.indexOf(record.turn), 1);
+    }
+    this.cutOffNote = kept ? CUT_OFF_NOTE : CUT_OFF_SILENT_NOTE;
+  }
+
+  private async answer(prospectText: string): Promise<string> {
     if (this.ended) throw new Error("Conversation has ended");
     if (this.messages.length === 0) throw new Error("Call start() first");
 
@@ -115,12 +178,14 @@ export class Conversation {
     if (this.overCostCap()) return this.finish("cost_limit");
 
     // Tool results deferred from the previous turn must lead the next user message.
+    const note: Anthropic.TextBlockParam[] = this.cutOffNote ? [{ type: "text", text: this.cutOffNote }] : [];
     this.messages.push(
-      this.pendingResults.length
-        ? { role: "user", content: [...this.pendingResults, { type: "text", text }] }
+      this.pendingResults.length || note.length
+        ? { role: "user", content: [...this.pendingResults, ...note, { type: "text", text }] }
         : { role: "user", content: text },
     );
     this.pendingResults = [];
+    this.cutOffNote = null;
     const spoken: string[] = [];
 
     for (let round = 0; round < this.settings.maxToolRounds; round++) {
