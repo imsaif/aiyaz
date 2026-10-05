@@ -47,6 +47,51 @@ describe("brief rows", () => {
     expect(JSON.parse((await kv.get(BRIEF_KEY("acme-aaaa")))!).facts).toHaveLength(2);
     expect(await kv.get(SLUG_FOR_KEY("empty-co"))).toBeNull();
   });
+  it("skips two companies in one batch that share a company key", async () => {
+    const kv = new MemoryKV();
+    const base = "Acme International Trading Holdings";
+    const plan = await planBriefs(
+      [
+        { company: `${base} North`, facts: cell },
+        { company: `${base} South`, facts: cell },
+        { company: "Acme", facts: cell },
+      ],
+      kv,
+      zeros,
+    );
+    expect(companyKey(`${base} North`)).toBe(companyKey(`${base} South`));
+    expect(plan[0]!.brief).toBeNull();
+    expect(plan[1]!.brief).toBeNull();
+    expect(plan[0]!.skipped).toMatch(/same key/);
+    expect(plan[2]!.brief).not.toBeNull();
+    expect(await writeBriefs(plan, kv)).toBe(1);
+  });
+  it("never reuses a slug whose stored brief belongs to another company", async () => {
+    const kv = new MemoryKV();
+    const stored = JSON.stringify({ company: "Acme Two", facts: [{ text: "x", source: "y" }] });
+    await kv.set(SLUG_FOR_KEY("acme"), "acme-7k2q");
+    await kv.set(BRIEF_KEY("acme-7k2q"), stored);
+    const [p] = await planBriefs([{ company: "Acme", facts: cell }], kv, zeros);
+    expect(p!.brief).toBeNull();
+    expect(p!.skipped).toMatch(/another company/);
+    expect(await writeBriefs([p!], kv)).toBe(0);
+    expect(await kv.get(BRIEF_KEY("acme-7k2q"))).toBe(stored);
+  });
+  it("reuses the slug when the stored brief is the same company, ignoring case and spaces", async () => {
+    const kv = new MemoryKV();
+    await kv.set(SLUG_FOR_KEY("acme"), "acme-7k2q");
+    await kv.set(BRIEF_KEY("acme-7k2q"), JSON.stringify({ company: " ACME ", facts: [] }));
+    const [p] = await planBriefs([{ company: "Acme", facts: cell }], kv, zeros);
+    expect(p!.slug).toBe("acme-7k2q");
+    expect(p!.brief).not.toBeNull();
+  });
+  it("treats an invalid stored slug as absent", async () => {
+    const kv = new MemoryKV();
+    await kv.set(SLUG_FOR_KEY("acme"), "Bad Slug!");
+    const [p] = await planBriefs([{ company: "Acme", facts: cell }], kv, zeros);
+    expect(p!.slug).toBe("acme-aaaa");
+    expect(p!.isNew).toBe(true);
+  });
   it("has a made-up Acme brief for tests and the spike", () => {
     expect(ACME_TEST.slug).toBe("acme-test");
     expect(ACME_TEST.brief.company).toBe("Acme");

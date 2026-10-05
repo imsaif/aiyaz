@@ -9,6 +9,12 @@ import { ACME_TEST, planBriefs, writeBriefs, type LeadRow } from "./brief-rows.j
 
 const args = process.argv.slice(2);
 const write = args.includes("--write");
+const onlyAt = args.indexOf("--only");
+const only = onlyAt >= 0 ? args[onlyAt + 1]?.toLowerCase() : undefined;
+if (onlyAt >= 0 && (!only || only.startsWith("--"))) {
+  console.error('--only needs a company name, for example: --only "<company>"');
+  process.exit(2);
+}
 const kv = kvFromEnv();
 if (write && !kv) {
   console.error("Set KV_REST_API_URL and KV_REST_API_TOKEN (from the getaiengineer Vercel project) in .env first.");
@@ -32,13 +38,15 @@ if (read.status !== 0) {
   process.exit(1);
 }
 const rows = JSON.parse(read.stdout) as LeadRow[];
-const onlyAt = args.indexOf("--only");
-const only = onlyAt >= 0 ? args[onlyAt + 1]?.toLowerCase() : undefined;
 const picked = only ? rows.filter((r) => r.company.toLowerCase() === only) : rows;
+if (only && picked.length === 0) {
+  console.error(`--only matched no company: ${args[onlyAt + 1]}`);
+  process.exit(1);
+}
 
 const plan = await planBriefs(picked, kv ?? new MemoryKV());
 for (const p of plan) {
-  const link = p.brief ? `https://getaiengineer.dev/?ref=${p.slug}${p.isNew ? " (new link)" : ""}` : "no usable facts, skipped";
+  const link = p.skipped ?? (p.brief ? `https://getaiengineer.dev/?ref=${p.slug}${p.isNew ? " (new link)" : ""}` : "no usable facts, skipped");
   console.log(`\n${p.company}: ${link}`);
   for (const f of p.brief?.facts ?? []) console.log(`  keep ${f.text}`);
   for (const d of p.dropped) console.log(`  drop ${d}`);
