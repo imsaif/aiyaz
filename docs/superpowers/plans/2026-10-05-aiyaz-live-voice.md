@@ -3276,7 +3276,7 @@ Expected: the worker logs that it registered with LiveKit as agent `aiyaz`.
 - [ ] **Step 5: Time cap.** Connect once more and say nothing for 2 minutes (the worker runs with `AIYAZ_MAX_SECONDS=120`).
 
 - [ ] **Step 6: Check the gates** (write each result in the commit message):
-- **G1** The opener is spoken word for word and starts "I'm Aiyaz, an AI agent from getaiengineer.dev." Lead call: it asks about the Acme fact as a question.
+- **G1** The opener is spoken word for word. Homepage call (dev token only): it starts "I'm Aiyaz, an AI agent from getaiengineer.dev." Lead call: it is exactly "Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?", and the Acme fact comes later as a question, never as a statement.
 - **G2** Price: in the India call, Aiyaz's caption text says "USD 6,000" (or "$6,000") when asked, and never AED.
 - **G3** `reply()` once per turn: the number of `"role":"conversation"` lines added to `traces.jsonl` per call equals the visitor turns, plus at most one extra per turn where the reply had no question.
 - **G4** Latency: median of the `[latency]` lines. Spec target about 1,500 ms. If the median is over 1,500 ms, stop and report the numbers to Imran with the two options measured: `AIYAZ_CONVERSATION_MODEL=claude-haiku-4-5` (one more run), and keeping Sonnet. Do not change the default model without his answer.
@@ -3284,18 +3284,22 @@ Expected: the worker logs that it registered with LiveKit as agent `aiyaz`.
 - **G6** Silence: 20 seconds of silence adds no `conversation` trace line and no speech.
 - **G7** Tab closed early: the worker logs `[call] <id> visitor_left ...`, with no transcript text in the log.
 - **G8** Time cap: after 120 s of silence Aiyaz says "We're at our time limit, so I'll stop here. The team will follow up with a summary." and leaves the room.
+- **G9** No transcript text in any log: read the whole worker output, including the lines written by `@livekit/agents` itself (not only our `[call]` and `[latency]` lines), and confirm none of them carries what the visitor or Aiyaz said. If a library line does, report it to Imran with the log level that prints it.
+- **G10** Close time: the shutdown callbacks and the Resend fetch have no timeout of their own. For each call, note the time from hang-up (or tab close) to the `[call]` line. If any close takes more than a few seconds, or never logs, report it to Imran before Task 17.
 
-- [ ] **Step 7: Measure voice cost.** From the Deepgram and TTS dashboards, divide today's usage cost by the call minutes from the `[call]` lines. Set the `AIYAZ_VOICE_USD_PER_MIN` default in `src/config.ts` to that number rounded up to two decimals.
+- [ ] **Step 7: Delete the test brief.** The slug `acme-test` is public in this repo, so the brief must not stay live. In the Upstash console (Data Browser for the getaiengineer database), delete the key `aiyaz:brief:acme-test` and confirm a lookup for it returns nothing. Task 17 writes it again only for its lead checks and deletes it again after.
 
-- [ ] **Step 8: Optional, one account fewer.** Repeat Step 3 with LiveKit Inference (`new inference.STT({ model: "deepgram/nova-3" })`, `new inference.TTS({ model: "cartesia/sonic-3" })`, `inference` imported from `@livekit/agents`). If it works, report to Imran that the separate Deepgram account may not be needed; do not switch without his answer.
+- [ ] **Step 8: Measure voice cost.** From the Deepgram and TTS dashboards, divide today's usage cost by the call minutes from the `[call]` lines. Set the `AIYAZ_VOICE_USD_PER_MIN` default in `src/config.ts` to that number rounded up to two decimals.
 
-- [ ] **Step 9: Run tests and typecheck, then commit**
+- [ ] **Step 9: Optional, one account fewer.** Repeat Step 3 with LiveKit Inference (`new inference.STT({ model: "deepgram/nova-3" })`, `new inference.TTS({ model: "cartesia/sonic-3" })`, `inference` imported from `@livekit/agents`). If it works, report to Imran that the separate Deepgram account may not be needed; do not switch without his answer.
+
+- [ ] **Step 10: Run tests and typecheck, then commit**
 
 Run: `pnpm test; echo $?` then `pnpm typecheck; echo $?` (both `0`).
 
 ```bash
 git add src/voice src/config.ts package.json pnpm-lock.yaml
-git commit -m "Voice spike: G1-G8 <results>; latency median <n> ms; voice USD <n>/min; versions <as installed>"
+git commit -m "Voice spike: G1-G10 <results>; latency median <n> ms; voice USD <n>/min; versions <as installed>"
 ```
 
 ---
@@ -3466,7 +3470,7 @@ git commit -m "README: how the voice worker, tokens, briefs and auditions fit to
 - Consumes: everything above. Site branch `aiyaz-live-voice` (Tasks 10 to 12).
 - Produces: a running worker `aiyaz-voice` on Fly.io; the site preview and, after Imran's yes, production.
 
-- [ ] **Step 1: Stop: needs a Fly.io account.** Imran runs `fly auth login` himself. Secrets needed (Step 4): `ANTHROPIC_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `DEEPGRAM_API_KEY`, `ELEVEN_API_KEY` or `CARTESIA_API_KEY`, `AIYAZ_TTS`, `AIYAZ_TTS_VOICE_ID`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `RESEND_API_KEY`, `AIYAZ_SUMMARY_TO`.
+- [ ] **Step 1: Stop: needs a Fly.io account.** Imran runs `fly auth login` himself. Secrets needed (Step 4): `ANTHROPIC_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `DEEPGRAM_API_KEY`, `ELEVEN_API_KEY` or `CARTESIA_API_KEY`, `AIYAZ_TTS`, `AIYAZ_TTS_VOICE_ID`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `RESEND_API_KEY`, `AIYAZ_SUMMARY_TO`, `AIYAZ_VOICE_USD_PER_MIN` (the number measured in Task 14 Step 8), `AIYAZ_COST_CAP_USD` (must equal the site's `AIYAZ_PER_CALL_USD`, which is `1`).
 
 - [ ] **Step 2: Container files**
 
@@ -3520,7 +3524,7 @@ Expected: `0`.
 
 ```bash
 fly launch --no-deploy --copy-config --name aiyaz-voice
-fly secrets set ANTHROPIC_API_KEY=... LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... DEEPGRAM_API_KEY=... ELEVEN_API_KEY=... AIYAZ_TTS=... AIYAZ_TTS_VOICE_ID=... KV_REST_API_URL=... KV_REST_API_TOKEN=... RESEND_API_KEY=... AIYAZ_SUMMARY_TO=...
+fly secrets set ANTHROPIC_API_KEY=... LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... DEEPGRAM_API_KEY=... ELEVEN_API_KEY=... AIYAZ_TTS=... AIYAZ_TTS_VOICE_ID=... KV_REST_API_URL=... KV_REST_API_TOKEN=... RESEND_API_KEY=... AIYAZ_SUMMARY_TO=... AIYAZ_VOICE_USD_PER_MIN=... AIYAZ_COST_CAP_USD=1
 fly deploy
 fly logs
 ```
@@ -3533,19 +3537,19 @@ git add Dockerfile fly.toml .dockerignore
 git commit -m "Deploy the Aiyaz voice worker to Fly.io (Mumbai, no public port)"
 ```
 
-- [ ] **Step 6: Site preview (workflow step 3 and 4 gates: ask Imran before pushing).** Set on Vercel for Preview: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (`npx vercel@latest env add <NAME> preview`). With Imran's yes, push branch `aiyaz-live-voice` from the site worktree and open its preview URL.
+- [ ] **Step 6: Site preview (workflow step 3 and 4 gates: ask Imran before pushing).** Set on Vercel for Preview: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (`npx vercel@latest env add <NAME> preview`). Leave `AIYAZ_HOMEPAGE_CALLS` unset (unset means off: only lead links can start a call, and the token function answers 404 to any other call). With Imran's yes, push branch `aiyaz-live-voice` from the site worktree and open its preview URL. Before the lead checks below, write the test brief again with `pnpm briefs --acme-test --write` (Task 14 Step 7 deleted it).
 
 - [ ] **Step 7: Preview checks** (pass/fail, written down for Imran):
 - `GET <preview>/node_modules/livekit-server-sdk/package.json` returns 404, and `<preview>/tests/price.test.js` returns 404.
-- Homepage call from India: hero and price card show `$6,000`; Aiyaz says USD 6,000 when asked. Ideally someone in the UAE checks AED 25,000 on both.
-- Lead call `<preview>/?ref=acme-test`: the card says "Talk to Aiyaz about Acme", no email asked, the opener asks about the Acme fact.
-- Fourth call from the same email in one day: the card shows the limit message with Book and WhatsApp.
-- Microphone blocked: the agreed microphone message with Book and WhatsApp.
-- Worker down: `fly scale count 0`, start a call; within about 15 s the card shows "The call could not start..." with Book and WhatsApp. Then `fly scale count 1`.
+- A visitor without a lead link (plain `<preview>/`) still sees "Play example" and no live call or email step. From India, the hero and price card show `$6,000`. Ideally someone in the UAE checks AED 25,000.
+- Lead call `<preview>/?ref=acme-test`: the card says "Talk to Aiyaz about Acme", no email asked, and the opener is exactly "Hi Acme, I'm Aiyaz, an AI agent from getaiengineer.dev. Who am I speaking with?". From India, Aiyaz says USD 6,000 when asked the price.
+- Fourth lead call from the same IP in one day: the card shows the limit message with Book and WhatsApp.
+- Microphone blocked on the lead link: the agreed microphone message with Book and WhatsApp.
+- Worker down: `fly scale count 0`, start a lead call; within about 15 s the card shows "The call could not start..." with Book and WhatsApp. Then `fly scale count 1`.
 - Interrupt once, stay silent 20 s, close the tab mid-call: each behaves as in Task 14; the summary email still arrives.
 - Phone (390 px) works as well as the laptop.
 
-- [ ] **Step 8: Go live (workflow steps 4 to 8, each gate is Imran's call).** Set the three `LIVEKIT_*` variables for Production too. Ask Imran to open and merge the site PR, then the aiyaz PR. After the deploy lands, verify on https://getaiengineer.dev, checking the change last: the old "Play example" text is gone and "Talk to Aiyaz" is present; from India the price reads `$6,000`. Then bring both main checkouts up to date, and only then remove the two worktrees after checking that nothing is uncommitted and every commit is on the main line.
+- [ ] **Step 8: Go live (workflow steps 4 to 8, each gate is Imran's call).** Set the three `LIVEKIT_*` variables for Production too, and leave `AIYAZ_HOMEPAGE_CALLS` unset there as well. Ask Imran to open and merge the site PR, then the aiyaz PR. After the deploy lands, verify on https://getaiengineer.dev, checking the change last: from India the price reads `$6,000`; the plain homepage still shows "Play example"; then the lead link `https://getaiengineer.dev/?ref=acme-test` shows the live card "Talk to Aiyaz about Acme" and no "Play example" (the old text is gone on the lead link and the new card is present). Then delete `aiyaz:brief:acme-test` from Upstash again. Then bring both main checkouts up to date, and only then remove the two worktrees after checking that nothing is uncommitted and every commit is on the main line.
 
 ---
 
