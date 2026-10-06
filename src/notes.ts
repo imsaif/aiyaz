@@ -4,10 +4,16 @@ import { EMAIL } from "./voice/meta.js";
 export type BriefFact = { text: string; source: string };
 export type Brief = { company: string; facts: BriefFact[] };
 
+// How far along the initiative is. The model may only record one of these; a visitor's
+// own edit on the page may say more ("pilot with two customers").
+export const STAGES = ["idea", "pilot", "live"] as const;
+
 export type Notes = {
+  company: string | null;
   product: string | null;
   users: string | null;
   aiFeature: string | null;
+  stage: string | null;
   owner: string | null;
   symptoms: string[];
   tried: string[];
@@ -20,9 +26,11 @@ export type Notes = {
 
 export function emptyNotes(brief: Brief | null): Notes {
   return {
+    company: brief ? brief.company : null,
     product: null,
     users: null,
     aiFeature: null,
+    stage: null,
     owner: null,
     symptoms: [],
     tried: [],
@@ -36,9 +44,11 @@ export function emptyNotes(brief: Brief | null): Notes {
 }
 
 export type NotesUpdate = {
+  company?: string;
   product?: string;
   users?: string;
   ai_feature?: string;
+  stage?: string;
   owner?: string;
   add_symptoms?: string[];
   add_tried?: string[];
@@ -61,9 +71,11 @@ const addUnique = (list: string[], items: string[] | undefined) => {
 
 export function applyNotesUpdate(notes: Notes, update: NotesUpdate): Notes {
   const next: Notes = structuredClone(notes);
+  if (oneLine(update.company)) next.company = oneLine(update.company);
   if (update.product?.trim()) next.product = update.product.trim();
   if (update.users?.trim()) next.users = update.users.trim();
   if (update.ai_feature?.trim()) next.aiFeature = update.ai_feature.trim();
+  if (typeof update.stage === "string" && (STAGES as readonly string[]).includes(update.stage)) next.stage = update.stage;
   if (update.owner?.trim()) next.owner = update.owner.trim();
   if (oneLine(update.visitor_name)) next.visitor_name = oneLine(update.visitor_name);
   if (oneLine(update.visitor_role)) next.visitor_role = oneLine(update.visitor_role);
