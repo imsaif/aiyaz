@@ -17,3 +17,6 @@ evals/arabic/.venv
 briefs/
 *.briefs.json
 auditions/
+
+# Local planning and mockup workspaces (ledgers can name real leads)
+.superpowers/
