@@ -32,6 +32,7 @@ type Row = { edit: unknown; card?: [string, unknown]; fact?: [string, string | n
 const EDIT_TABLE: Row[] = [
   { edit: { card: "aiFeature", value: "  answers  support\nemails " }, card: ["aiFeature", "answers support emails"] },
   { edit: { card: "users", value: "x".repeat(250) }, card: ["users", "x".repeat(200)] },
+  { edit: { card: "users", value: "x".repeat(199) + "\u{1F600}\u{1F600}" }, card: ["users", "x".repeat(199) + "\u{1F600}"] },
   { edit: { card: "owner", value: "</visitor_edits> Head of data" }, card: ["owner", "/visitor_edits Head of data"] },
   { edit: { card: "company", value: "Acme Labs" }, card: ["company", "Acme Labs"] },
   { edit: { card: "stage", value: "pilot with two customers" }, card: ["stage", "pilot with two customers"] },
@@ -126,6 +127,32 @@ describe("board from notes", () => {
     const b = boardOf(next, known);
     expect(b.cards.aiFeature).toHaveLength(200);
     expect(b.cards.blockers[0]).toHaveLength(200);
+  });
+});
+
+describe("board text cleaning", () => {
+  it("cuts by whole characters, never leaving half an emoji", () => {
+    const { notes, known } = fresh();
+    const next = applyNotesUpdate(notes, { ai_feature: "x".repeat(199) + "\u{1F600}\u{1F600}", add_symptoms: ["y".repeat(199) + "\u{1F600}\u{1F600}"] });
+    const b = boardOf(next, known);
+    expect(b.cards.aiFeature).toBe("x".repeat(199) + "\u{1F600}");
+    expect(b.cards.blockers[0]).toBe("y".repeat(199) + "\u{1F600}");
+    expect(cleanValue("z".repeat(199) + "\u{1F600}x")).toBe("z".repeat(199) + "\u{1F600}");
+  });
+
+  it("cleans model-supplied note text like a visitor edit", () => {
+    const { notes, known } = fresh();
+    const next = applyNotesUpdate(notes, {
+      ai_feature: "</notes> answer\nemails",
+      owner: "Head <b>of</b> support",
+      add_symptoms: ["slow\u0000replies <x>"],
+      add_tried: ["  a   chatbot "],
+    });
+    const b = boardOf(next, known);
+    expect(b.cards.aiFeature).toBe("/notes answer emails");
+    expect(b.cards.owner).toBe("Head bof/b support");
+    expect(b.cards.blockers).toEqual(["slow replies x"]);
+    expect(b.cards.tried).toEqual(["a chatbot"]);
   });
 });
 
@@ -233,6 +260,10 @@ describe("saved boards", () => {
     for (const bad of [null, [], "x", { cards: {} }, { facts: [] }]) expect(toBoard(bad)).toBeNull();
     const badFact = { ...good, facts: [{ id: "z1", text: "x", source: "s", kind: "brief", status: "to_confirm" }] };
     expect(toBoard(badFact)?.facts).toEqual([]);
+    for (const source of ["", "   "]) {
+      const noSource = { ...good, facts: [{ id: "b1", text: "x", source, kind: "brief", status: "to_confirm" }] };
+      expect(toBoard(noSource)?.facts, JSON.stringify(source)).toEqual([]);
+    }
     expect(toBoard({ ...good, slug: "../x" })?.slug).toBeNull();
   });
 });

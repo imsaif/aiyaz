@@ -59,20 +59,20 @@ export type EditResult = { notes: Notes; known: KnownFact[]; note: string };
 export type SavedStart = { notes: Notes; known: KnownFact[]; researched: boolean };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const clip = (s: string) => s.slice(0, MAX_CARD_CHARS).trim();
+const clip = (s: string) => cleanValue(s) ?? "";
 const clipOrNull = (s: string | null) => (s ? clip(s) || null : null);
 
 // Plain text only: control characters become spaces, < and > go (so no value can close a
 // marked block in the prompt), whitespace collapses, at most 200 characters.
 export function cleanValue(v: unknown): string | null {
   if (typeof v !== "string") return null;
-  return v
+  const text = v
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/[<>]/g, "")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, MAX_CARD_CHARS)
     .trim();
+  // Cut by whole characters so an emoji is never split into a lone surrogate.
+  return Array.from(text).slice(0, MAX_CARD_CHARS).join("").trim();
 }
 
 export function knownFromBrief(brief: Brief | null): KnownFact[] {
@@ -160,7 +160,7 @@ function factOf(f: unknown): BoardFact[] {
   const { id, text, source, kind, status } = f;
   if (typeof id !== "string" || !FACT_ID.test(id)) return [];
   if (typeof text !== "string" || !text.trim() || text.length > MAX_FACT_CHARS) return [];
-  if (typeof source !== "string" || (kind !== "brief" && kind !== "found")) return [];
+  if (typeof source !== "string" || !source.trim() || (kind !== "brief" && kind !== "found")) return [];
   if (status !== "to_confirm" && status !== "confirmed") return [];
   return [{ id, text: text.trim(), source, kind, status }];
 }
