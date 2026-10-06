@@ -7,6 +7,8 @@ import {
   boardUrl,
   cleanValue,
   isBoardId,
+  loadBoard,
+  saveBoard,
   knownFromBrief,
   parseEdit,
   startFromBoard,
@@ -14,6 +16,7 @@ import {
   type CardKey,
   type KnownFact,
 } from "../src/board.js";
+import { MemoryKV, type KV } from "../src/kv.js";
 import { applyNotesUpdate, emptyNotes, type Notes } from "../src/notes.js";
 
 const brief = {
@@ -265,5 +268,34 @@ describe("saved boards", () => {
       expect(toBoard(noSource)?.facts, JSON.stringify(source)).toEqual([]);
     }
     expect(toBoard({ ...good, slug: "../x" })?.slug).toBeNull();
+  });
+});
+
+describe("board store", () => {
+  const id = "AbCdEfGhIjKlMnOpQr_-12";
+  it("saves under aiyaz:board:<id> for 30 days and loads it back", async () => {
+    const kv = new MemoryKV();
+    const { notes, known } = fresh();
+    const b = boardOf(notes, known);
+    await saveBoard(kv, id, b);
+    expect(kv.ttl.get(`aiyaz:board:${id}`)).toBe(2_592_000);
+    expect(await loadBoard(kv, id)).toEqual(b);
+  });
+  it("is null for a bad id, a missing board, bad JSON, no store or a store error", async () => {
+    const kv = new MemoryKV();
+    await kv.set(`aiyaz:board:${id}`, "{not json");
+    expect(await loadBoard(kv, id)).toBeNull();
+    expect(await loadBoard(kv, "BbCdEfGhIjKlMnOpQr_-12")).toBeNull();
+    expect(await loadBoard(kv, "../etc")).toBeNull();
+    expect(await loadBoard(null, id)).toBeNull();
+    expect(await loadBoard(kv, null)).toBeNull();
+    const broken: KV = {
+      get: async () => {
+        throw new Error("down");
+      },
+      set: async () => {},
+      incrByFloat: async () => 0,
+    };
+    expect(await loadBoard(broken, id)).toBeNull();
   });
 });

@@ -33,6 +33,7 @@ export type Settings = {
   traceFile: string;
   summaryTo: string;
   summaryFrom: string;
+  siteUrl: string;
   transcriptDays: number;
   // Deepgram + TTS estimate per call minute, counted in the daily total. Measured in the voice spike.
   voiceUsdPerMinute: number;
@@ -141,6 +142,8 @@ export function loadSettings(): Settings {
     traceFile: env("AIYAZ_TRACE_FILE", "traces.jsonl"),
     summaryTo: env("AIYAZ_SUMMARY_TO", ""),
     summaryFrom: env("AIYAZ_SUMMARY_FROM", "Aiyaz <work@getaiengineer.dev>"),
+    // Where board links point. A preview deploy can set its own address.
+    siteUrl: env("AIYAZ_SITE_URL", "https://getaiengineer.dev"),
     // Spec assumption, Imran to confirm.
     transcriptDays: num("AIYAZ_TRANSCRIPT_DAYS", 30),
     voiceUsdPerMinute: num("AIYAZ_VOICE_USD_PER_MIN", 0.05),

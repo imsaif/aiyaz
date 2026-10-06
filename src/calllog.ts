@@ -1,5 +1,6 @@
 // What is kept after a call, the emails sent,  and the day's spend.
 // Built only from notes and what was said, never from a new model call.
+import { CARD_KEYS, CARD_LABELS, type Board } from "./board.js";
 import type { Turn } from "./conversation.js";
 import type { KV } from "./kv.js";
 import type { Notes } from "./notes.js";
@@ -21,6 +22,10 @@ export type CallLog = {
   notes: Notes;
   transcript: Turn[];
   summary: string[];
+  // The board as it was when the call closed, and its private link (the link is the key: it goes
+  // into the two emails and the stored log, never into a log line).
+  board: Board | null;
+  boardUrl: string | null;
   // What the token function reserved for this call, from the dispatch metadata (null if not given).
   reservedDay: string | null;
   reservedUsd: number | null;
@@ -37,6 +42,8 @@ export type CallLogInput = {
   notes: Notes;
   transcript: Turn[];
   voiceUsdPerMinute: number;
+  board?: Board | null;
+  boardUrl?: string | null;
 };
 
 export const CALL_KEY = (id: string) => `aiyaz:call:${id}`;
@@ -50,6 +57,7 @@ export function summaryLines(notes: Notes, transcript: Turn[]): string[] {
     notes.product && `Product: ${notes.product}`,
     notes.users && `Used by: ${notes.users}`,
     notes.aiFeature && `AI feature: ${notes.aiFeature}`,
+    notes.stage && `Stage: ${notes.stage}`,
     notes.owner && `Owner: ${notes.owner}`,
     ...notes.symptoms.map((s) => `In the way: ${s}`),
     ...notes.tried.map((t) => `Already tried: ${t}`),
@@ -58,6 +66,31 @@ export function summaryLines(notes: Notes, transcript: Turn[]): string[] {
   const last = [...transcript].reverse().find((t) => t.role === "aiyaz")?.text;
   if (last && lines.length) lines.push(`Aiyaz's last words: ${last}`);
   return lines;
+}
+
+const cardLines = (board: Board): string[] => {
+  const lines: string[] = [];
+  for (const key of CARD_KEYS) {
+    const value = board.cards[key];
+    const text = Array.isArray(value) ? value.join("; ") : value;
+    if (text) lines.push(`${CARD_LABELS[key]}: ${text}`);
+  }
+  return lines;
+};
+const factLine = (f: Board["facts"][number], withSource: boolean) =>
+  `${f.kind === "found" ? "Found online" : "From the brief"} (${f.status === "confirmed" ? "confirmed" : "to confirm"}): ${f.text}` +
+  (withSource && f.kind === "found" && f.source ? ` (${f.source})` : "");
+
+// The team's view: the cards, then every fact with its kind and status, found facts with their source.
+// Name, role and email are not on the board.
+export function boardLines(board: Board): string[] {
+  return [...cardLines(board), ...board.facts.map((f) => factLine(f, true))];
+}
+
+// The visitor's view: the cards and only the facts they confirmed. A fact still to confirm
+// is never asserted to them.
+export function visitorBoardLines(board: Board): string[] {
+  return [...cardLines(board), ...board.facts.filter((f) => f.status === "confirmed").map((f) => factLine(f, false))];
 }
 
 export function buildCallLog(i: CallLogInput): CallLog {
@@ -79,6 +112,8 @@ export function buildCallLog(i: CallLogInput): CallLog {
     notes: i.notes,
     transcript: i.transcript,
     summary: summaryLines(i.notes, i.transcript),
+    board: i.board ?? null,
+    boardUrl: i.boardUrl ?? null,
     reservedDay: i.meta.day,
     reservedUsd: i.meta.reservedUsd,
   };
@@ -108,6 +143,8 @@ export function emailText(log: CallLog): string {
     "",
     "Summary:",
     ...(log.summary.length ? log.summary.map((l) => `- ${l}`) : ["- Nothing learned in this call."]),
+    ...(log.board && boardLines(log.board).length ? ["", "Their board:", ...boardLines(log.board).map((l) => `- ${l}`)] : []),
+    ...(log.boardUrl ? ["", `Their brief: ${log.boardUrl}`] : []),
     "",
     `Call id: ${log.id}`,
   ].join("\n");
@@ -134,13 +171,17 @@ export async function sendSummaryEmail(
 const BOOKING_LINK = "https://cal.com/getaiengineer/30min";
 const WHATSAPP_LINK = "https://wa.me/919150686857?text=Hi%2C%20I%27d%20like%20to%20talk%20about%20our%20AI%20initiative.";
 
-// What the visitor heard at the end of the call, plus ways to carry on. No internal notes.
+// What the visitor's brief says (confirmed facts only), plus ways to carry on. No internal notes.
 export function visitorEmailText(log: CallLog): string {
+  const lines = log.board ? visitorBoardLines(log.board) : log.summary;
   return [
-    "Thanks for talking with Aiyaz. Here is what we covered:",
+    "Thanks for talking with Aiyaz. Here is your brief:",
     "",
-    ...(log.summary.length ? log.summary.map((l) => `- ${l}`) : ["- We did not get far enough to note anything down."]),
+    ...(lines.length ? lines.map((l) => `- ${l}`) : ["- We did not get far enough to note anything down."]),
     "",
+    ...(log.boardUrl
+      ? ["Your brief is saved at a private link for 30 days. You can edit it, share it with your team, or talk to Aiyaz again from it:", log.boardUrl, ""]
+      : []),
     "If you want to go further, book 30 minutes with the team:",
     BOOKING_LINK,
     "",

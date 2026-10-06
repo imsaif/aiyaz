@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CALL_KEY,
   SPEND_KEY,
+  boardLines,
   buildCallLog,
   emailSubject,
   emailText,
@@ -12,6 +13,7 @@ import {
   summaryLines,
   visitorEmailText,
 } from "../src/calllog.js";
+import { boardFromNotes, knownFromBrief } from "../src/board.js";
 import { MemoryKV } from "../src/kv.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 import { parseCallMeta } from "../src/voice/meta.js";
@@ -35,12 +37,12 @@ const transcript = [
   { role: "aiyaz" as const, text: "My guess is the assistant reads dates from the wrong field." },
 ];
 const START = Date.parse("2026-10-05T10:00:00Z");
-const NO_META = { country: null, slug: null, email: null, day: null, reservedUsd: null };
+const NO_META = { country: null, slug: null, email: null, day: null, reservedUsd: null, board: null };
 const log = buildCallLog({
   id: "call-1",
   startedAt: START,
   endedAt: START + 300_000,
-  meta: { country: "AE", slug: "acme-test", email: "cto@acme.example", day: null, reservedUsd: null },
+  meta: { country: "AE", slug: "acme-test", email: "cto@acme.example", day: null, reservedUsd: null, board: null },
   company: "Acme",
   endReason: "agent_ended",
   claudeUsd: 0.12,
@@ -228,5 +230,63 @@ describe("sendCallEmails", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain(log.id);
     expect(lines[0]).not.toContain("acme.example");
+  });
+});
+
+describe("board links", () => {
+  const BOARD_URL = "https://getaiengineer.dev/aiyaz/b/AbCdEfGhIjKlMnOpQr_-12";
+  const board = boardFromNotes(notes, knownFromBrief(brief), START, { slug: "acme-test" });
+  const mk = (b: typeof board) =>
+    buildCallLog({
+      id: "call-2", startedAt: START, endedAt: START + 60_000, meta: { ...NO_META, email: "cto@acme.example" }, company: "Acme",
+      endReason: "agent_ended", claudeUsd: 0.1, notes, transcript, voiceUsdPerMinute: 0.05, board: b, boardUrl: BOARD_URL,
+    });
+  const withBoard = mk(board);
+  // A board that still holds a fact to confirm and a found fact with a source.
+  const open = boardFromNotes(emptyNotes(brief), knownFromBrief(brief), START, { slug: "acme-test" });
+  const mixed = mk({
+    ...board,
+    facts: [
+      ...board.facts,
+      { id: "f1", text: "is hiring a data engineer", source: "https://acme.example/jobs", kind: "found", status: "to_confirm" },
+    ],
+  });
+  it("keeps the board and its link in the call log", () => {
+    expect(withBoard.board).toEqual(board);
+    expect(withBoard.boardUrl).toBe(BOARD_URL);
+    expect(log.board).toBeNull();
+    expect(log.boardUrl).toBeNull();
+  });
+  it("links the board in the team email", () => {
+    expect(emailText(withBoard)).toContain(`Their brief: ${BOARD_URL}`);
+    expect(emailText(log)).not.toContain("Their brief");
+  });
+  it("gives the visitor the brief cards, the board link and the booking link", () => {
+    const body = visitorEmailText(withBoard);
+    expect(body).toContain("Company: Acme");
+    expect(body).toContain("From the brief (confirmed): send payment reminders");
+    expect(body).not.toContain("import customers from a CRM");
+    expect(body).toContain(BOARD_URL);
+    expect(body).toContain("https://cal.com/getaiengineer/30min");
+    expect(body).not.toContain("\u2014");
+  });
+  it("lists every filled card in board order, then the facts with kind and status", () => {
+    expect(boardLines(board)).toEqual([
+      "Company: Acme",
+      "What's blocking it: the assistant gives wrong due dates",
+      "From the brief (confirmed): send payment reminders",
+    ]);
+  });
+  it("leaves facts still to confirm out of the visitor email", () => {
+    const body = visitorEmailText(mixed);
+    expect(body).toContain("send payment reminders");
+    expect(body).not.toContain("is hiring a data engineer");
+    expect(visitorEmailText(mk(open))).not.toContain("launched an AI assistant");
+  });
+  it("shows the team every fact with its status, and found facts with their source", () => {
+    const body = emailText(mixed);
+    expect(body).toContain("From the brief (confirmed): send payment reminders");
+    expect(body).toContain("Found online (to confirm): is hiring a data engineer (https://acme.example/jobs)");
+    expect(emailText(mk(open))).toContain("From the brief (to confirm): import customers from a CRM");
   });
 });

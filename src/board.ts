@@ -2,6 +2,7 @@
 // Built only from notes and known facts, so the visitor's name, role and email never reach it.
 // Twin of board-core.js in the getaiengineer repo: same card keys, same edit rules, same edit table.
 import { isValidSlug } from "./briefs.js";
+import type { KV } from "./kv.js";
 import { emptyNotes, type Brief, type Notes } from "./notes.js";
 
 export const CARD_KEYS = ["company", "aiFeature", "users", "stage", "owner", "blockers", "tried"] as const;
@@ -204,4 +205,20 @@ export function startFromBoard(board: Board): SavedStart {
   notes.unconfirmedFacts = board.facts.filter((f) => f.status === "to_confirm").map((f) => f.text);
   const known = board.facts.map(({ id, text, source, kind }) => ({ id, text, source, kind }));
   return { notes, known, researched: board.researched };
+}
+
+// A board that cannot be read (bad id, missing, bad JSON, store down) is simply not there.
+export async function loadBoard(kv: KV | null, id: string | null): Promise<Board | null> {
+  if (!kv || !isBoardId(id)) return null;
+  try {
+    const raw = await kv.get(BOARD_KEY(id));
+    return raw ? toBoard(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Every save refreshes the 30-day expiry.
+export async function saveBoard(kv: KV, id: string, board: Board): Promise<void> {
+  await kv.set(BOARD_KEY(id), JSON.stringify(board), BOARD_DAYS * 86_400);
 }

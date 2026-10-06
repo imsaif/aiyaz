@@ -1,6 +1,7 @@
-// The token function on the site puts { country, slug?, email?, day, reservedUsd } in the
+// The token function on the site puts { country, slug?, email?, day, reservedUsd, board } in the
 // dispatch metadata: day and reservedUsd say which spend key it reserved on, and how much.
 // Everything is checked again here: the worker trusts nothing it did not parse.
+import { isBoardId } from "../board.js";
 import { isValidSlug } from "../briefs.js";
 import { normCountry } from "../config.js";
 
@@ -12,6 +13,7 @@ export type CallMeta = {
   email: string | null;
   day: string | null;
   reservedUsd: number | null;
+  board: string | null;
 };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -35,5 +37,6 @@ export function parseCallMeta(raw: string | null | undefined): CallMeta {
     email: EMAIL.test(email) ? email : null,
     day: DAY.test(str(o.day)) ? str(o.day) : null,
     reservedUsd: typeof o.reservedUsd === "number" && Number.isFinite(o.reservedUsd) && o.reservedUsd >= 0 ? o.reservedUsd : null,
+    board: isBoardId(o.board) ? o.board : null,
   };
 }
