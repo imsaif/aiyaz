@@ -7,14 +7,17 @@ import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import * as silero from "@livekit/agents-plugin-silero";
 import { RoomEvent } from "@livekit/rtc-node";
 import { fileURLToPath } from "node:url";
-import { loadBrief } from "../briefs.js";
+import { boardUrl } from "../board.js";
 import { buildCallLog, sendCallEmails, storeCall } from "../calllog.js";
 import { forCountry, loadSettings, type Settings } from "../config.js";
 import { Conversation } from "../conversation.js";
 import { kvFromEnv, kvMissingNotice } from "../kv.js";
 import { AnthropicLLM } from "../llm.js";
 import { JsonlTracer } from "../tracer.js";
+import { BOARD_TOPIC, BoardLink, boardSaver, EDIT_METHOD, editHandler } from "./board-link.js";
 import { BrainLLM } from "./brain-llm.js";
+import { finishCall } from "./call-end.js";
+import { callStart } from "./call-start.js";
 import { hideSpokenTextInLibraryLogs } from "./log-redact.js";
 import { AGENT_NAME, parseCallMeta } from "./meta.js";
 import { PlayoutTracker } from "./playout.js";
@@ -49,14 +52,45 @@ export default defineAgent({
     hideSpokenTextInLibraryLogs();
     const meta = parseCallMeta(ctx.job.metadata);
     const kv = kvFromEnv();
-    const brief = await loadBrief(kv, meta.slug);
+    // A saved board ("Talk again") wins over the lead brief.
+    const begin = await callStart(kv, meta);
     const settings = forCountry(loadSettings(), meta.country);
     const startedAt = Date.now();
+
+    // The board goes to the visitor's page on every change and is saved under the id from the
+    // token. Logs name the call id only: never the board id, link or content.
+    const saveToStore = kv && meta.board ? boardSaver(kv, meta.board, begin.savedAt ?? null) : null;
+    const link = new BoardLink({
+      send: async (json) => {
+        const me = ctx.room.localParticipant;
+        // Nobody left to show it to (the visitor hung up): saving is enough.
+        if (!me || ctx.room.remoteParticipants.size === 0) return;
+        await me.sendText(json, { topic: BOARD_TOPIC });
+      },
+      // Compare-and-set: a visitor's PUT edit newer than the worker's last load or save is
+      // merged in, never overwritten.
+      save: async (board) => {
+        if (saveToStore) await saveToStore(board);
+      },
+      log: (what) => console.error(`[board] ${brain.id} ${what}`),
+    });
+
     const brain = new Conversation({
       settings,
       llm: new AnthropicLLM(settings.requestTimeoutMs),
       tracer: new JsonlTracer(settings.traceFile),
-      brief,
+      brief: begin.brief,
+      start: begin.saved,
+      slug: begin.slug,
+      emailKnown: meta.email !== null,
+      // Called inside the Conversation's tool-result handling: it only queues, and never throws.
+      onBoard: (board) => {
+        try {
+          link.push(board);
+        } catch {
+          // push already never throws; this guard keeps a tool call from losing its result.
+        }
+      },
       // Ids and counts only, for example when the price guard replaces a wrong amount.
       log: (line) => console.log(line),
     });
@@ -96,7 +130,7 @@ export default defineAgent({
         console.log(`[latency] ${Date.now() - heardAt} ms`);
         heardAt = 0;
       }
-      // Aiyaz has given its summary and called end_conversation: leave once it stops talking.
+      // Aiyaz has given its goodbye and called end_conversation: leave once it stops talking.
       if (ev.newState === "listening" && brain.ended) void hangUp("");
     });
     // The 10-minute cap, even if the visitor never speaks.
@@ -108,40 +142,48 @@ export default defineAgent({
       stopTimer();
       if (logged) return;
       logged = true;
-      const log = buildCallLog({
-        id: brain.id,
-        startedAt,
-        endedAt: Date.now(),
-        meta,
-        company: brief?.company ?? null,
-        endReason: brain.endReason ?? "visitor_left",
-        claudeUsd: brain.costUsd,
-        notes: brain.notes,
-        transcript: brain.transcript,
-        voiceUsdPerMinute: settings.voiceUsdPerMinute,
+      // Every change was already pushed; wait for those saves before the emails link to the board.
+      // No extra push here: it could land after a visitor's post-call edit.
+      const log = await finishCall({
+        flush: () => link.flush(),
+        build: () => {
+          const board = brain.board();
+          return buildCallLog({
+            id: brain.id,
+            startedAt,
+            endedAt: Date.now(),
+            meta,
+            company: board.company ?? begin.company,
+            endReason: brain.endReason ?? "visitor_left",
+            claudeUsd: brain.costUsd,
+            notes: brain.notes,
+            transcript: brain.transcript,
+            voiceUsdPerMinute: settings.voiceUsdPerMinute,
+            board,
+            boardUrl: kv && meta.board ? boardUrl(settings.siteUrl, meta.board) : null,
+          });
+        },
+        // Settles on the metadata's reserved day and amount; costCapUsd is only the fallback.
+        store: kv ? (l) => storeCall(kv, l, { transcriptDays: settings.transcriptDays, reservedUsd: settings.costCapUsd }) : null,
+        // sendCallEmails skips quietly without a key.
+        email: (l) => sendCallEmails(l, { apiKey: process.env.RESEND_API_KEY, to: settings.summaryTo, from: settings.summaryFrom }),
+        error: (line) => console.error(line),
       });
-      // Settles on the metadata's reserved day and amount; costCapUsd is only the fallback.
-      if (kv) {
-        await storeCall(kv, log, { transcriptDays: settings.transcriptDays, reservedUsd: settings.costCapUsd }).catch((err) =>
-          console.error(`[call] store failed: ${err instanceof Error ? err.name : "unknown"}`),
-        );
-      }
-      // Never throws into the worker; sendCallEmails skips quietly without a key.
-      try {
-        await sendCallEmails(log, { apiKey: process.env.RESEND_API_KEY, to: settings.summaryTo, from: settings.summaryFrom });
-      } catch (err) {
-        console.error(`[call] ${log.id} emails failed: ${err instanceof Error ? err.name : "error"}`);
-      }
-      // Ids and numbers only: transcripts never go to the logs.
+      // Ids and numbers only: transcripts and boards never go to the logs.
       console.log(
-        `[call] ${log.id} ${log.endReason} ${log.durationSec}s USD ${log.costUsd.toFixed(3)} country=${log.country ?? "?"} lead=${log.slug ? "yes" : "no"}`,
+        `[call] ${log.id} ${log.endReason} ${log.durationSec}s USD ${log.costUsd.toFixed(3)} country=${log.country ?? "?"} lead=${log.slug ? "yes" : "no"} revisit=${begin.saved ? "yes" : "no"}`,
       );
     });
 
     // record: LiveKit Cloud session reports carry transcript and audio, so they stay off by default.
+    // start() connects the room, so the local participant exists after it.
     await session.start({ agent: new AiyazAgent(playout), room: ctx.room, record: settings.livekitRecord });
+    // Card edits from the visitor's page. Applied silently; nothing about an edit is logged.
+    ctx.room.localParticipant?.registerRpcMethod(EDIT_METHOD, editHandler((edit) => brain.edit(edit)));
     // Fixed text from code: the AI disclosure never depends on the model.
     session.say(brain.start(), { allowInterruptions: false });
+    // The starting board (lead facts, or the saved board), shown and saved at once.
+    link.push(brain.board());
   },
 });
 

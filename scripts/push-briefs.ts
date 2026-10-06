@@ -23,7 +23,7 @@ if (write && !kv) {
 
 if (args.includes("--acme-test")) {
   if (write) await kv!.set(BRIEF_KEY(ACME_TEST.slug), JSON.stringify(ACME_TEST.brief));
-  console.log(`${write ? "wrote" : "would write"} ${BRIEF_KEY(ACME_TEST.slug)}: https://getaiengineer.dev/?ref=${ACME_TEST.slug}`);
+  console.log(`${write ? "wrote" : "would write"} ${BRIEF_KEY(ACME_TEST.slug)}: https://getaiengineer.dev/aiyaz?ref=${ACME_TEST.slug}`);
   process.exit(0);
 }
 
@@ -46,7 +46,7 @@ if (only && picked.length === 0) {
 
 const plan = await planBriefs(picked, kv ?? new MemoryKV());
 for (const p of plan) {
-  const link = p.skipped ?? (p.brief ? `https://getaiengineer.dev/?ref=${p.slug}${p.isNew ? " (new link)" : ""}` : "no usable facts, skipped");
+  const link = p.skipped ?? (p.brief ? `https://getaiengineer.dev/aiyaz?ref=${p.slug}${p.isNew ? " (new link)" : ""}` : "no usable facts, skipped");
   console.log(`\n${p.company}: ${link}`);
   for (const f of p.brief?.facts ?? []) console.log(`  keep ${f.text}`);
   for (const d of p.dropped) console.log(`  drop ${d}`);

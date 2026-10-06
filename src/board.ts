@@ -222,3 +222,43 @@ export async function loadBoard(kv: KV | null, id: string | null): Promise<Board
 export async function saveBoard(kv: KV, id: string, board: Board): Promise<void> {
   await kv.set(BOARD_KEY(id), JSON.stringify(board), BOARD_DAYS * 86_400);
 }
+
+// The worker's saves run after the visitor may have edited the board with PUT (after the call,
+// or when phase 2 findings land late). A stored board with a later updatedAt wins.
+export async function saveUnlessNewer(kv: KV, id: string, board: Board): Promise<boolean> {
+  const stored = await loadBoard(kv, id);
+  if (stored && stored.updatedAt > board.updatedAt) return false;
+  await saveBoard(kv, id, board);
+  return true;
+}
+
+// A stored board changed by someone else wins: its cards, facts and statuses stay, and only
+// facts the worker has that it lacks (by id) are added.
+export function mergeBoards(stored: Board, mine: Board): Board {
+  const ids = new Set(stored.facts.map((f) => f.id));
+  const added = mine.facts.filter((f) => !ids.has(f.id));
+  return {
+    ...stored,
+    facts: [...stored.facts, ...added].slice(0, MAX_LIST_ITEMS),
+    researching: mine.researching,
+    researched: stored.researched || mine.researched,
+    updatedAt: mine.updatedAt > stored.updatedAt ? mine.updatedAt : stored.updatedAt,
+  };
+}
+
+// Compare-and-set for the worker. `seen` is the updatedAt of the board it last loaded or saved
+// (null for none). If the stored board is newer than that (a visitor's PUT edit), the two are
+// merged instead of overwritten. Unlike loadBoard, a store that cannot be read throws, so a
+// failed read never looks like "nothing stored". Returns the board it wrote.
+export async function saveSince(kv: KV, id: string, board: Board, seen: string | null): Promise<Board> {
+  const raw = await kv.get(BOARD_KEY(id));
+  let stored: Board | null = null;
+  try {
+    stored = raw ? toBoard(JSON.parse(raw)) : null;
+  } catch {
+    stored = null;
+  }
+  const next = stored && (seen === null || stored.updatedAt > seen) ? mergeBoards(stored, board) : board;
+  await saveBoard(kv, id, next);
+  return next;
+}
