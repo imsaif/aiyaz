@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits } from "../src/guards.js";
+import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice, scrubForbiddenNames, toLatinDigits, withOnlySprintPrice } from "../src/guards.js";
 import { costUsd } from "../src/prices.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 
@@ -66,6 +66,52 @@ describe("only the sprint price", () => {
   });
 });
 
+describe("only the sprint price, USD visitor", () => {
+  const usd = { amount: 6000, currency: "USD" as const };
+  it("accepts the ways USD 6,000 is written", () => {
+    for (const t of [
+      "It costs $6,000.",
+      "USD 6,000 fixed",
+      "US$6,000",
+      "6,000 dollars",
+      "6,000 US dollars",
+      "6,000 USD",
+      "6 thousand dollars",
+      "no price here",
+    ]) {
+      expect(onlySprintPrice(t, usd), t).toBe(true);
+    }
+  });
+  it("rejects other amounts, AED, suffixes and conversions", () => {
+    for (const t of [
+      "$3,000",
+      "$6k",
+      "USD 6,000.50",
+      "AED 25,000",
+      "6,000 AED",
+      "$6,000, about AED 22,000",
+      "six thousand dollars",
+      "8 thousand dollars",
+      "₹5,00,000",
+      "€6,000",
+      "8 million dollars",
+      "8 thousand USD",
+      "7 hundred dollars",
+      "$6,000 or 7 hundred dollars",
+      "6 thousand dollars or eight thousand dollars",
+    ]) {
+      expect(onlySprintPrice(t, usd), t).toBe(false);
+    }
+  });
+  it("an AED visitor still may not hear dollars, even the USD price", () => {
+    const aed = { amount: 25000, currency: "AED" as const };
+    expect(onlySprintPrice("$6,000", aed)).toBe(false);
+    expect(onlySprintPrice("25 thousand dirhams", aed)).toBe(true);
+    expect(onlySprintPrice("8 thousand dirhams", aed)).toBe(false);
+    expect(onlySprintPrice("7 hundred dirhams", aed)).toBe(false);
+  });
+});
+
 describe("cost", () => {
   it("prices Sonnet 5 at $2 in and $10 out per million tokens", () => {
     expect(costUsd("claude-sonnet-5", { input_tokens: 1_000_000, output_tokens: 1_000_000 })).toBeCloseTo(12);
@@ -91,5 +137,49 @@ describe("notes", () => {
     const n = applyNotesUpdate(emptyNotes(brief), { reject_facts: ["launched an AI support bot"] });
     expect(n.confirmedFacts).toEqual([]);
     expect(n.unconfirmedFacts).toEqual([]);
+  });
+});
+
+describe("disclosesAtOpening", () => {
+  const ai = "I'm Aiyaz, an AI agent.";
+  it("accepts the welcome-back opener, and nothing else in front of the disclosure", () => {
+    expect(disclosesAtOpening(`Welcome back, ${ai} Shall we pick up where we left off?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Welcome back. Good to see you. ${ai}`, "Aiyaz")).toBe(false);
+  });
+  it("accepts the plain and the lead opener, including a company ending in a full stop", () => {
+    expect(disclosesAtOpening(`${ai} What is your company trying to do with AI?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Hi Acme, ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Hi Acme Inc., ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);
+  });
+  it("rejects a first turn without it, or with it after another sentence", () => {
+    expect(disclosesAtOpening("Hello there. What does your company do?", "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening(`Hello. ${ai} Who are you?`, "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening(`Hi Acme. Welcome. ${ai}`, "Aiyaz")).toBe(false);
+    expect(disclosesAtOpening("", "Aiyaz")).toBe(false);
+  });
+});
+
+describe("withOnlySprintPrice", () => {
+  const usd = { amount: 6000, currency: "USD" as const };
+  const line = "The two-week sprint is USD 6,000.";
+  it("replaces a sentence naming another price with the visitor's price", () => {
+    const out = withOnlySprintPrice("Good question. The sprint is AED 25,000. Who signs off?", usd, line);
+    expect(out).toEqual({ text: "Good question. The two-week sprint is USD 6,000. Who signs off?", replaced: 1 });
+  });
+  it("leaves the right price alone", () => {
+    const text = "The sprint is USD 6,000 for two weeks. Shall I book a call?";
+    expect(withOnlySprintPrice(text, usd, line)).toEqual({ text, replaced: 0 });
+  });
+  it("leaves a reply with no amount alone", () => {
+    const text = "Who uses it day to day?";
+    expect(withOnlySprintPrice(text, usd, line)).toEqual({ text, replaced: 0 });
+  });
+  it("catches an amount written in words", () => {
+    const out = withOnlySprintPrice("It costs twenty-five thousand dirhams. Does that work?", usd, line);
+    expect(out).toEqual({ text: "The two-week sprint is USD 6,000. Does that work?", replaced: 1 });
+  });
+  it("says the fixed line once when several sentences in a row are wrong", () => {
+    const out = withOnlySprintPrice("It is AED 25,000. That is about $6,800. Who signs off?", usd, line);
+    expect(out).toEqual({ text: "The two-week sprint is USD 6,000. Who signs off?", replaced: 2 });
   });
 });
