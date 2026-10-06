@@ -532,3 +532,14 @@ describe("price guard when the call stops early", () => {
     expect(said).toContain("USD 6,000");
   });
 });
+
+describe("fixed wrap-up lines", () => {
+  const tail = "Your brief is on your screen, and the booking button is there if a call with the team would help.";
+  it("point to the brief and the booking button, and promise no follow-up summary", () => {
+    expect(WRAP_UP.time_limit).toBe(`We're at our time limit, so I'll stop here. ${tail}`);
+    expect(WRAP_UP.turn_limit).toBe(`I think I have enough to go on, so I'll stop here. ${tail}`);
+    expect(WRAP_UP.cost_limit).toBe(`I'll stop here for now. ${tail}`);
+    expect(WRAP_UP.error).toBe(`Something went wrong on my side, so I have to stop here. ${tail}`);
+    for (const line of Object.values(WRAP_UP)) expect(line).not.toMatch(/follow up/i);
+  });
+});

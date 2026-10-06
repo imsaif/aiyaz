@@ -142,6 +142,10 @@ describe("notes", () => {
 
 describe("disclosesAtOpening", () => {
   const ai = "I'm Aiyaz, an AI agent.";
+  it("accepts the welcome-back opener, and nothing else in front of the disclosure", () => {
+    expect(disclosesAtOpening(`Welcome back, ${ai} Shall we pick up where we left off?`, "Aiyaz")).toBe(true);
+    expect(disclosesAtOpening(`Welcome back. Good to see you. ${ai}`, "Aiyaz")).toBe(false);
+  });
   it("accepts the plain and the lead opener, including a company ending in a full stop", () => {
     expect(disclosesAtOpening(`${ai} What is your company trying to do with AI?`, "Aiyaz")).toBe(true);
     expect(disclosesAtOpening(`Hi Acme, ${ai} Who am I speaking with?`, "Aiyaz")).toBe(true);

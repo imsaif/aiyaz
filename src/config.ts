@@ -102,7 +102,7 @@ function ttsFromEnv(): Settings["ttsProvider"] {
 export function loadSettings(): Settings {
   return {
     agentName: env("AIYAZ_AGENT_NAME", "Aiyaz"),
-    promptVersion: env("AIYAZ_PROMPT_VERSION", "v3"),
+    promptVersion: env("AIYAZ_PROMPT_VERSION", "v4"),
     // The unknown visitor until forCountry() is applied.
     sprintPrice: PRICES.unknown,
     knowledgePack: packsFromEnv().unknown,

@@ -48,10 +48,10 @@ const TOOLS: Anthropic.Tool[] = [
 ];
 
 export const WRAP_UP: Record<Exclude<EndReason, "agent_ended">, string> = {
-  time_limit: "We're at our time limit, so I'll stop here. The team will follow up with a summary.",
-  turn_limit: "I think I have enough to go on, so I'll stop here. The team will follow up with a summary.",
-  cost_limit: "I'll stop here for now. The team will follow up with a summary.",
-  error: "Something went wrong on my side, so I have to stop here. The team will follow up with you.",
+  time_limit: "We're at our time limit, so I'll stop here. Your brief is on your screen, and the booking button is there if a call with the team would help.",
+  turn_limit: "I think I have enough to go on, so I'll stop here. Your brief is on your screen, and the booking button is there if a call with the team would help.",
+  cost_limit: "I'll stop here for now. Your brief is on your screen, and the booking button is there if a call with the team would help.",
+  error: "Something went wrong on my side, so I have to stop here. Your brief is on your screen, and the booking button is there if a call with the team would help.",
 };
 const TOOL_ROUND_FALLBACK = "Could you tell me a little more about that?";
 const CUT_OFF_NOTE = "(The prospect cut you off. They heard only the part of your last reply shown above.)";
