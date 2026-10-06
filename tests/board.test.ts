@@ -17,7 +17,8 @@ import {
   type KnownFact,
 } from "../src/board.js";
 import { MemoryKV, type KV } from "../src/kv.js";
-import { applyNotesUpdate, emptyNotes, type Notes } from "../src/notes.js";
+import { applyNotesUpdate, emptyNotes, type Notes, type BriefFact } from "../src/notes.js";
+import { toBrief, usableFact } from "../src/briefs.js";
 
 const brief = {
   company: "Acme",
@@ -29,6 +30,19 @@ const brief = {
 const NOW = Date.parse("2026-10-05T10:00:00Z");
 const fresh = () => ({ notes: emptyNotes(brief), known: knownFromBrief(brief) });
 const boardOf = (notes: Notes, known: KnownFact[]) => boardFromNotes(notes, known, NOW, { slug: "acme-7k2q" });
+
+// Mirrored in getaiengineer tests/board.test.js; change both or neither.
+const FACT_TABLE: { fact: BriefFact; usable: boolean }[] = [
+  { fact: { text: "launched an AI assistant that answers customer questions", source: "https://acme.example/news" }, usable: true },
+  { fact: { text: "hired a data team", source: "" }, usable: false },
+  { fact: { text: "hired a data team", source: "   " }, usable: false },
+  { fact: { text: "raised USD 12M in a Series A", source: "https://acme.example/press" }, usable: false },
+  { fact: { text: "raised $5M", source: "s" }, usable: false },
+  { fact: { text: "closed a 40 million dollar round", source: "https://acme.example/press" }, usable: false },
+  { fact: { text: "raised twelve million dollars", source: "https://acme.example/press" }, usable: false },
+  { fact: { text: "x".repeat(301), source: "s" }, usable: false },
+  { fact: { text: "is hiring a data engineer", source: "https://acme.example/jobs" }, usable: true },
+];
 
 // The same table is in the site's tests/board.test.js. Change both together.
 type Row = { edit: unknown; card?: [string, unknown]; fact?: [string, string | null, string?]; rejected?: true };
@@ -297,5 +311,24 @@ describe("board store", () => {
       incrByFloat: async () => 0,
     };
     expect(await loadBoard(broken, id)).toBeNull();
+  });
+});
+
+describe("shared brief-fact table", () => {
+  it("facts with a money amount or no source are dropped", () => {
+    for (const row of FACT_TABLE) {
+      expect(usableFact(row.fact), row.fact.text.slice(0, 30) + "|" + row.fact.source).toBe(row.usable);
+    }
+  });
+
+  it("numbered facts are identical on worker and site", () => {
+    const briefData = toBrief({ company: "Acme", facts: FACT_TABLE.map((r) => r.fact) });
+    expect(briefData).not.toBeNull();
+    const facts = knownFromBrief(briefData);
+    expect(facts.map((f) => [f.id, f.text])).toEqual([
+      ["b1", "launched an AI assistant that answers customer questions"],
+      ["b2", "is hiring a data engineer"],
+    ]);
+    expect(facts[1]!.source).toBe("https://acme.example/jobs");
   });
 });
