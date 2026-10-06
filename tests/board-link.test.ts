@@ -1,7 +1,8 @@
 import { RpcError } from "@livekit/rtc-node";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   BOARD_KEY,
+  baselineOf,
   boardFromNotes,
   boardUrl,
   knownFromBrief,
@@ -17,8 +18,8 @@ import { Conversation } from "../src/conversation.js";
 import { MemoryKV, type KV } from "../src/kv.js";
 import { applyNotesUpdate, emptyNotes } from "../src/notes.js";
 import { MemoryTracer } from "../src/tracer.js";
-import { BoardLink, boardSaver, EDIT_REJECTED, editHandler } from "../src/voice/board-link.js";
-import { finishCall } from "../src/voice/call-end.js";
+import { BoardLink, boardSaver, EDIT_REJECTED, editHandler, helloHandler } from "../src/voice/board-link.js";
+import { FLUSH_CAP_MS, finishCall } from "../src/voice/call-end.js";
 import { callStart } from "../src/voice/call-start.js";
 import { BRIEF_KEY } from "../src/briefs.js";
 import { FakeLLM, text, tool } from "./fake-llm.js";
@@ -165,7 +166,7 @@ describe("the worker's saves never overwrite a newer stored board", () => {
     const kv = new MemoryKV();
     const loaded = board("2026-10-05T10:00:00.000Z", "Acme", [fact("b1", "runs a support bot", "to_confirm")]);
     await saveBoard(kv, id, loaded);
-    const save = boardSaver(kv, id, loaded.updatedAt);
+    const save = boardSaver(kv, id, baselineOf(loaded));
     await saveBoard(kv, id, board("2026-10-05T10:00:05.000Z", "Acme Edited", [fact("b1", "runs a support bot", "confirmed")]));
     await save(board("2026-10-05T10:00:09.000Z", "Acme", [fact("b1", "runs a support bot", "to_confirm")]));
     const stored = await loadBoard(kv, id);
@@ -179,7 +180,32 @@ describe("the worker's saves never overwrite a newer stored board", () => {
     await boardSaver(kv, id, null)(board("2026-10-05T10:00:00.000Z", "Acme", [fact("f1", "hiring a data engineer", "to_confirm")]));
     const stored = await loadBoard(kv, id);
     expect(stored?.company).toBe("Acme Saved");
-    expect(stored?.facts.map((f) => f.id)).toEqual(["f1"]);
+    // With no baseline the stored board decides the facts: nothing is added.
+    expect(stored?.facts).toEqual([]);
+  });
+
+  it("a fact the visitor removed after the call stays removed after the worker's final save", async () => {
+    const kv = new MemoryKV();
+    const save = boardSaver(kv, id, null);
+    const b1 = fact("b1", "runs a support bot", "to_confirm");
+    const b2 = fact("b2", "is hiring a data engineer", "to_confirm");
+    await save(board("2026-10-05T10:00:00.000Z", "Acme", [b1, b2]));
+    // After the call the visitor deletes b2 on the site.
+    await saveBoard(kv, id, board("2026-10-05T10:05:00.000Z", "Acme", [b1]));
+    // The worker's last save still carries b2, plus a fact found during this call.
+    await save(board("2026-10-05T10:04:00.000Z", "Acme", [b1, b2, fact("f1", "opened an office in Dubai", "to_confirm")]));
+    expect((await loadBoard(kv, id))?.facts.map((f) => f.id)).toEqual(["b1", "f1"]);
+  });
+
+  it("a talk-again start that failed to load the board does not bring rejected brief facts back", async () => {
+    const kv = new MemoryKV();
+    // Saved last time with b2 rejected; the worker's load failed, so it started from the brief.
+    await saveBoard(kv, id, board("2026-10-05T09:00:00.000Z", "Acme", [fact("b1", "runs a support bot", "confirmed")]));
+    await boardSaver(kv, id, null)(
+      board("2026-10-05T10:00:00.000Z", "Acme", [fact("b1", "runs a support bot", "to_confirm"), fact("b2", "is hiring a data engineer", "to_confirm")]),
+    );
+    const stored = await loadBoard(kv, id);
+    expect(stored?.facts.map((f) => [f.id, f.status])).toEqual([["b1", "confirmed"]]);
   });
 
   it("a store that cannot be read fails the save instead of overwriting blind", async () => {
@@ -312,6 +338,7 @@ describe("call end", () => {
     link.push(boardNamed("Acme"));
     const done: string[] = [];
     await finishCall({
+      id: "call-1",
       flush: () => link.flush(),
       build: log,
       store: async () => void done.push("store"),
@@ -326,6 +353,7 @@ describe("call end", () => {
     const lines: string[] = [];
     const done: string[] = [];
     await finishCall({
+      id: "call-1",
       flush: async () => {
         throw new Error("Acme");
       },
@@ -346,9 +374,61 @@ describe("call end", () => {
 
   it("without a store, only the emails run", async () => {
     const done: string[] = [];
-    const out = await finishCall({ flush: async () => {}, build: log, store: null, email: async () => void done.push("email"), error: () => {} });
+    const out = await finishCall({ id: "call-1", flush: async () => {}, build: log, store: null, email: async () => void done.push("email"), error: () => {} });
     expect(done).toEqual(["email"]);
     expect(out.id).toBe("call-1");
+  });
+});
+
+describe("call end, with a board store that never answers", () => {
+  it("stops waiting for the board after the cap and still stores the call and sends the emails", async () => {
+    vi.useFakeTimers();
+    try {
+      const lines: string[] = [];
+      const done: string[] = [];
+      const link = new BoardLink({ send: async () => {}, save: () => new Promise<void>(() => {}), log: () => {} });
+      link.push(boardNamed("Acme"));
+      const finished = finishCall({
+        id: "call-1",
+        flush: () => link.flush(),
+        build: () =>
+          buildCallLog({
+            id: "call-1", startedAt: 0, endedAt: 60_000,
+            meta: { country: "AE", slug: null, email: null, day: null, reservedUsd: null, board: null },
+            company: "Acme", endReason: "visitor_left", claudeUsd: 0, notes: emptyNotes(null), transcript: [], voiceUsdPerMinute: 0,
+          }),
+        store: async () => void done.push("store"),
+        email: async () => void done.push("email"),
+        error: (l) => lines.push(l),
+      });
+      await vi.advanceTimersByTimeAsync(FLUSH_CAP_MS - 1);
+      expect(done).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      await finished;
+      expect(FLUSH_CAP_MS).toBe(5000);
+      expect(done).toEqual(["store", "email"]);
+      expect(lines).toEqual(["[call] call-1 board flush timed out after 5000 ms"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("aiyaz.hello RPC", () => {
+  it("re-pushes the current board through the same queue and answers ok", async () => {
+    const sent: string[] = [];
+    const link = new BoardLink({ send: async (json) => void sent.push(JSON.parse(json).company), save: async () => {}, log: () => {} });
+    const handler = helloHandler(() => link.push(boardNamed("Acme")));
+    await expect(handler({ payload: "" } as Parameters<typeof handler>[0])).resolves.toBe("ok");
+    await link.flush();
+    expect(sent).toEqual(["Acme"]);
+  });
+
+  it("still answers ok if the push throws", async () => {
+    const handler = helloHandler(() => {
+      throw new Error("Acme");
+    });
+    await expect(handler({ payload: "" } as Parameters<typeof handler>[0])).resolves.toBe("ok");
   });
 });
 
@@ -375,7 +455,7 @@ describe("callStart", () => {
     expect(start.company).toBe("Acme");
     expect(start.slug).toBe("acme-7k2q");
     // The worker's save baseline: the stored board's own time.
-    expect(start.savedAt).toBe(saved.updatedAt);
+    expect(start.baseline).toEqual({ updatedAt: saved.updatedAt, factIds: ["b1"] });
   });
 
   it("a new board id starts from the brief, or from nothing", async () => {

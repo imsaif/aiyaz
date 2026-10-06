@@ -232,11 +232,17 @@ export async function saveUnlessNewer(kv: KV, id: string, board: Board): Promise
   return true;
 }
 
-// A stored board changed by someone else wins: its cards, facts and statuses stay, and only
-// facts the worker has that it lacks (by id) are added.
-export function mergeBoards(stored: Board, mine: Board): Board {
-  const ids = new Set(stored.facts.map((f) => f.id));
-  const added = mine.facts.filter((f) => !ids.has(f.id));
+// What the worker last loaded or saved: its time, and which facts it held. A fact id that was
+// in the baseline but is missing from the stored board was removed, so it stays removed.
+export type Baseline = { updatedAt: string; factIds: string[] };
+export const baselineOf = (board: Board): Baseline => ({ updatedAt: board.updatedAt, factIds: board.facts.map((f) => f.id) });
+
+// A stored board changed by someone else wins: its cards, facts and statuses stay. Only facts
+// that are new since the baseline (in neither the baseline nor the stored board, for example
+// found during this call) are added. With no baseline, the stored board decides every fact.
+export function mergeBoards(stored: Board, mine: Board, baseline: Baseline | null): Board {
+  const known = new Set([...stored.facts.map((f) => f.id), ...(baseline?.factIds ?? [])]);
+  const added = baseline ? mine.facts.filter((f) => !known.has(f.id)) : [];
   return {
     ...stored,
     facts: [...stored.facts, ...added].slice(0, MAX_LIST_ITEMS),
@@ -246,11 +252,11 @@ export function mergeBoards(stored: Board, mine: Board): Board {
   };
 }
 
-// Compare-and-set for the worker. `seen` is the updatedAt of the board it last loaded or saved
-// (null for none). If the stored board is newer than that (a visitor's PUT edit), the two are
+// Compare-and-set for the worker. `baseline` is the board it last loaded or saved (null for
+// none). If the stored board is newer than that (a visitor's PUT edit), the two are
 // merged instead of overwritten. Unlike loadBoard, a store that cannot be read throws, so a
 // failed read never looks like "nothing stored". Returns the board it wrote.
-export async function saveSince(kv: KV, id: string, board: Board, seen: string | null): Promise<Board> {
+export async function saveSince(kv: KV, id: string, board: Board, baseline: Baseline | null): Promise<Board> {
   const raw = await kv.get(BOARD_KEY(id));
   let stored: Board | null = null;
   try {
@@ -258,7 +264,8 @@ export async function saveSince(kv: KV, id: string, board: Board, seen: string |
   } catch {
     stored = null;
   }
-  const next = stored && (seen === null || stored.updatedAt > seen) ? mergeBoards(stored, board) : board;
+  const newer = stored && (baseline === null || stored.updatedAt > baseline.updatedAt);
+  const next = stored && newer ? mergeBoards(stored, board, baseline) : board;
   await saveBoard(kv, id, next);
   return next;
 }

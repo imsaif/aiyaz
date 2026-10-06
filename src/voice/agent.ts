@@ -14,7 +14,7 @@ import { Conversation } from "../conversation.js";
 import { kvFromEnv, kvMissingNotice } from "../kv.js";
 import { AnthropicLLM } from "../llm.js";
 import { JsonlTracer } from "../tracer.js";
-import { BOARD_TOPIC, BoardLink, boardSaver, EDIT_METHOD, editHandler } from "./board-link.js";
+import { BOARD_TOPIC, BoardLink, boardSaver, EDIT_METHOD, editHandler, HELLO_METHOD, helloHandler } from "./board-link.js";
 import { BrainLLM } from "./brain-llm.js";
 import { finishCall } from "./call-end.js";
 import { callStart } from "./call-start.js";
@@ -59,7 +59,7 @@ export default defineAgent({
 
     // The board goes to the visitor's page on every change and is saved under the id from the
     // token. Logs name the call id only: never the board id, link or content.
-    const saveToStore = kv && meta.board ? boardSaver(kv, meta.board, begin.savedAt ?? null) : null;
+    const saveToStore = kv && meta.board ? boardSaver(kv, meta.board, begin.baseline ?? null) : null;
     const link = new BoardLink({
       send: async (json) => {
         const me = ctx.room.localParticipant;
@@ -139,12 +139,20 @@ export default defineAgent({
 
     let logged = false;
     ctx.addShutdownCallback(async () => {
+      // No more edits or board requests from the page once the call is closing.
+      try {
+        ctx.room.localParticipant?.unregisterRpcMethod(EDIT_METHOD);
+        ctx.room.localParticipant?.unregisterRpcMethod(HELLO_METHOD);
+      } catch {
+        // Already gone with the room.
+      }
       stopTimer();
       if (logged) return;
       logged = true;
       // Every change was already pushed; wait for those saves before the emails link to the board.
       // No extra push here: it could land after a visitor's post-call edit.
       const log = await finishCall({
+        id: brain.id,
         flush: () => link.flush(),
         build: () => {
           const board = brain.board();
@@ -180,6 +188,8 @@ export default defineAgent({
     await session.start({ agent: new AiyazAgent(playout), room: ctx.room, record: settings.livekitRecord });
     // Card edits from the visitor's page. Applied silently; nothing about an edit is logged.
     ctx.room.localParticipant?.registerRpcMethod(EDIT_METHOD, editHandler((edit) => brain.edit(edit)));
+    // The page asks for the current board once it listens, so a late subscriber never sits empty.
+    ctx.room.localParticipant?.registerRpcMethod(HELLO_METHOD, helloHandler(() => link.push(brain.board())));
     // Fixed text from code: the AI disclosure never depends on the model.
     session.say(brain.start(), { allowInterruptions: false });
     // The starting board (lead facts, or the saved board), shown and saved at once.

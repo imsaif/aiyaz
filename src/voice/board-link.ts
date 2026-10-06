@@ -2,11 +2,13 @@
 // Boards pushed while one is being sent are coalesced: only the newest goes next, so a slow
 // save can never overwrite a newer board. Failures are logged as a fixed phrase, never content.
 import { RpcError, type RpcInvocationData } from "@livekit/rtc-node";
-import { parseEdit, saveSince, type Board, type Edit } from "../board.js";
+import { baselineOf, parseEdit, saveSince, type Baseline, type Board, type Edit } from "../board.js";
 import type { KV } from "../kv.js";
 
 export const BOARD_TOPIC = "aiyaz.board";
 export const EDIT_METHOD = "aiyaz.edit";
+// The page calls this once it listens for boards, so a late subscriber gets the current one.
+export const HELLO_METHOD = "aiyaz.hello";
 // RpcError codes 1001 to 1999 are reserved by LiveKit.
 export const EDIT_REJECTED = 2400;
 
@@ -74,10 +76,22 @@ export class BoardLink {
 }
 
 // The worker's save: never overwrites a board someone else changed since it last loaded or
-// saved it (see saveSince). `seen` starts at the loaded board's updatedAt, or null for a new id.
-export function boardSaver(kv: KV, id: string, seen: string | null): (board: Board) => Promise<void> {
+// saved it (see saveSince). The baseline starts at the loaded board, or null for none.
+export function boardSaver(kv: KV, id: string, baseline: Baseline | null): (board: Board) => Promise<void> {
   return async (board) => {
-    seen = (await saveSince(kv, id, board, seen)).updatedAt;
+    baseline = baselineOf(await saveSince(kv, id, board, baseline));
+  };
+}
+
+// The aiyaz.hello RPC handler: queues the current board again and always answers "ok".
+export function helloHandler(push: () => void): (data: RpcInvocationData) => Promise<string> {
+  return async () => {
+    try {
+      push();
+    } catch {
+      // The board still goes out with the next change.
+    }
+    return "ok";
   };
 }
 
