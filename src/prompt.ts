@@ -14,8 +14,11 @@ const ENGLISH_ONLY =
 
 const GULF_ARABIC = [
   "- Reply in the language the caller uses. If they write in Arabic, reply in Gulf (Khaleeji) Arabic as spoken in the UAE, not Modern Standard Arabic.",
-  "- Use Gulf words, not Levantine or Egyptian ones: منو not مين, شو not وش or ايش (شو is the Emirati word), يكون not بيكون, يتابع not بيتابع, الحين not هلأ.",
-  "- In Arabic, keep the same short sentences. Product and technical terms such as evals, chatbot or monitoring may stay in English, as Gulf speakers often do.",
+  "- Use Emirati words, not Levantine, Egyptian or Saudi ones: منو not مين, شو not وش or ايش, الحين not هلأ, مب not مو, الياي not الجاي, بعده not لسا, عقب for then, ويا for with, وايد for a lot, برع for outside. In a question that offers choices, join them with ولا, not أو.",
+  '- The future with بـ is natural Emirati: بيتابع, بيكون, بيتواصل. Acknowledge with "فهمت عليك" and greet with "يا مرحبا".',
+  "- In Arabic, keep the same short sentences. Product and technical terms such as evals, chatbot, prompt or monitoring stay in English, as Gulf speakers often do.",
+  "- Do not praise the caller's answers (no ممتاز, منطقي جداً, تفكير سليم). Acknowledge in a few words and ask the next question.",
+  "- In Arabic, the closing summary is at most four short sentences, one idea each.",
   '- In Arabic replies, say the price as "25 ألف درهم" and nothing else. In English replies, the price is AED 25,000, written in English.',
   "- If they switch language, switch with them.",
 ].join("\n");
@@ -74,7 +77,9 @@ function savedSection(saved: { notes: Notes; known: KnownFact[] }): string {
 export function buildSystemPrompt(settings: Settings, brief: Brief | null, opts: PromptOptions = {}): BuiltPrompt {
   const template = readFileSync(promptsDir(`${PROMPT_NAME}.${settings.promptVersion}.md`), "utf8");
   const pack = settings.knowledgePack ? readFileSync(promptsDir(`knowledge/${settings.knowledgePack}.md`), "utf8") : "";
-  const sha8 = createHash("sha256").update(template).update(pack).digest("hex").slice(0, 8);
+  // The language rule is hashed too, so a change to the Arabic rules shows in the prompt id.
+  const languageRule = settings.arabicEnabled && settings.sprintPrice.currency === "AED" ? GULF_ARABIC : ENGLISH_ONLY;
+  const sha8 = createHash("sha256").update(template).update(pack).update(languageRule).digest("hex").slice(0, 8);
   const saved = opts.saved ?? null;
   const emailKnown = opts.emailKnown ?? !brief;
   const briefSection = saved
@@ -94,10 +99,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null, opts:
     .replaceAll("{{knowledgeSection}}", pack)
     .replaceAll("{{marketWhere}}", settings.knowledgePack ? (MARKET_WHERE[settings.knowledgePack] ?? "") : "")
     // The Gulf Arabic rule quotes the AED price, so it only applies to AED visitors.
-    .replaceAll(
-      "{{languageRule}}",
-      settings.arabicEnabled && settings.sprintPrice.currency === "AED" ? GULF_ARABIC : ENGLISH_ONLY,
-    );
+    .replaceAll("{{languageRule}}", languageRule);
   const packTag = settings.knowledgePack ? `+${settings.knowledgePack}` : "";
   return { text, id: `${PROMPT_NAME}/${settings.promptVersion}${packTag}@${sha8}` };
 }

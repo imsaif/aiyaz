@@ -73,6 +73,21 @@ describe("Arabic switch", () => {
     expect(p.text).toContain("شو not وش");
     expect(p.text).not.toContain("you can only continue in English for now");
   });
+  it("on: follows the native Emirati review (bi- future allowed, Emirati words, no praise, short summary)", () => {
+    const p = buildSystemPrompt({ ...v2, arabicEnabled: true }, null);
+    expect(p.text).not.toContain("يكون not بيكون");
+    expect(p.text).toContain("بيتابع, بيكون");
+    expect(p.text).toContain("مب not مو");
+    expect(p.text).toContain("الياي not الجاي");
+    expect(p.text).toContain("join them with ولا");
+    expect(p.text).toContain("Do not praise the caller's answers");
+    expect(p.text).toContain("at most four short sentences");
+  });
+  it("the prompt id changes when the language rule changes", () => {
+    const off = buildSystemPrompt({ ...v2, arabicEnabled: false }, null);
+    const on = buildSystemPrompt({ ...v2, arabicEnabled: true }, null);
+    expect(on.id).not.toBe(off.id);
+  });
   it("defaults to off", () => {
     expect(base.arabicEnabled).toBe(false);
   });
