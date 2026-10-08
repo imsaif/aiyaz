@@ -22,6 +22,10 @@ export const SESSION_TURN_HANDLING = {
     mode: "vad",
     // Speech this long pauses Aiyaz.
     minDuration: 450,
+    // At least two words heard before Aiyaz stops, so a cough, an "mm" or a stray word nearby
+    // does not cut a reply (call of 7 Oct: 5 of 10 replies cut). A one-word reply said while
+    // Aiyaz is speaking is dropped by the library; one said after Aiyaz finishes is unaffected.
+    minWords: 2,
     // No transcript within 1 s after the pause means it was noise: Aiyaz carries on.
     falseInterruptionTimeout: 1000,
     resumeFalseInterruption: true,

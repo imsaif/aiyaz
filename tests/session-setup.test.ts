@@ -12,6 +12,7 @@ describe("session turn handling", () => {
     expect(interruption.enabled).toBe(true);
     expect(interruption.minDuration).toBe(450);
     expect(interruption.falseInterruptionTimeout).toBe(1000);
+    expect(interruption.minWords).toBe(2);
     expect(interruption.resumeFalseInterruption).toBe(true);
     expect(preemptiveGeneration.enabled).toBe(false);
   });

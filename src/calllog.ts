@@ -214,7 +214,10 @@ export async function sendVisitorEmail(
   log: CallLog,
   opts: { apiKey: string; from: string; fetchFn?: typeof fetch },
 ): Promise<boolean> {
-  if (!log.email) return false;
+  if (!log.email) {
+    console.log(`[call] ${log.id} visitor email skipped: no email`);
+    return false;
+  }
   return postEmail(
     opts.apiKey,
     opts.fetchFn ?? fetch,

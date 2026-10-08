@@ -1,5 +1,6 @@
 // The Aiyaz voice worker: LiveKit hears and speaks, the Conversation decides what to say.
 // Local: pnpm voice:dev      Fly.io: pnpm voice:start
+import { BackgroundVoiceCancellation } from "@livekit/noise-cancellation-node";
 import { type JobContext, type JobProcess, ServerOptions, cli, defineAgent, type llm, voice } from "@livekit/agents";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
@@ -185,7 +186,14 @@ export default defineAgent({
 
     // record: LiveKit Cloud session reports carry transcript and audio, so they stay off by default.
     // start() connects the room, so the local participant exists after it.
-    await session.start({ agent: new AiyazAgent(playout), room: ctx.room, record: settings.livekitRecord });
+    await session.start({
+      agent: new AiyazAgent(playout),
+      room: ctx.room,
+      record: settings.livekitRecord,
+      // Removes voices other than the caller's (LiveKit Cloud), so people talking nearby
+      // neither cut Aiyaz off nor hold the caller's turn open.
+      inputOptions: { noiseCancellation: BackgroundVoiceCancellation() },
+    });
     // Card edits from the visitor's page. Applied silently; nothing about an edit is logged.
     ctx.room.localParticipant?.registerRpcMethod(EDIT_METHOD, editHandler((edit) => brain.edit(edit)));
     // The page asks for the current board once it listens, so a late subscriber never sits empty.
