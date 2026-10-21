@@ -46,12 +46,14 @@ describe("v2 prompt", () => {
     const brief = { company: "Imran's Bakery", facts: [{ text: "x", source: "s" }] };
     const line = openingLine({ ...v2, forbiddenNames: ["Imran"] }, brief);
     expect(line).not.toContain("Imran");
-    expect(line).toContain("Hi the team Bakery");
+    expect(line).toContain("We came across the team Bakery");
   });
-  it("greets the company by name and asks who is speaking when there is a brief", () => {
+  it("introduces the team, names the company and asks permission when there is a brief", () => {
     const brief = { company: "  Acme ", facts: [{ text: "launched an AI assistant", source: "s" }] };
     const line = openingLine(v2, brief);
-    expect(line).toBe("Hi Acme, I'm Aiyaz, an AI agent. Who am I speaking with?");
+    expect(line).toBe(
+      "Hi there, I'm Aiyaz, an AI agent. I work with the AI engineering experts at getaiengineer.dev. We came across Acme and what you're building with AI. In about ten minutes I'd like to understand where your AI work is stuck, and by the end you'll have a short brief with the blockers and the approaches we'd suggest. Is now a good time?",
+    );
     expect(disclosesAtOpening(line, "Aiyaz")).toBe(true);
     expect(line).not.toContain("I read that");
   });

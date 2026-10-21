@@ -111,7 +111,12 @@ export function openingLine(settings: Settings, brief: Brief | null, opts: { rev
   if (opts.revisit) return scrubForbiddenNames(`Welcome back, ${intro} Shall we pick up where we left off?`, settings.forbiddenNames);
   // One sentence of greeting, so the AI disclosure is still in the first sentence.
   // The company name is not model output, so it is scrubbed here.
-  if (brief) return scrubForbiddenNames(`Hi ${brief.company.trim()}, ${intro} Who am I speaking with?`, settings.forbiddenNames);
+  // Says who is calling, why, and what they get by the end, then asks permission (Imran, 2026-10-21).
+  if (brief)
+    return scrubForbiddenNames(
+      `Hi there, ${intro} I work with the AI engineering experts at getaiengineer.dev. We came across ${brief.company.trim()} and what you're building with AI. In about ten minutes I'd like to understand where your AI work is stuck, and by the end you'll have a short brief with the blockers and the approaches we'd suggest. Is now a good time?`,
+      settings.forbiddenNames,
+    );
   return settings.promptVersion === "v1"
     ? `${intro} What does your product do, and where does AI show up in it?`
     : `${intro} What is your company trying to do with AI?`;

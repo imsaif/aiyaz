@@ -21,10 +21,11 @@ describe("opening", () => {
       "I'm Aiyaz, an AI agent. What is your company trying to do with AI?",
     );
   });
-  it("greets a lead by company name and asks who they are", () => {
+  it("greets a lead with the team intro, names the company and asks permission", () => {
     const brief = { company: "Acme", facts: [{ text: "launched an AI support bot", source: "https://acme.test" }] };
     const opener = make(new FakeLLM([]), { brief }).start();
-    expect(opener).toBe("Hi Acme, I'm Aiyaz, an AI agent. Who am I speaking with?");
+    expect(opener).toContain("We came across Acme");
+    expect(opener).toMatch(/Is now a good time\?$/);
     expect(disclosesAtOpening(opener, "Aiyaz")).toBe(true);
   });
 });
