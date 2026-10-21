@@ -1,0 +1,14 @@
+.env
+.env.*
+node_modules
+*.jsonl
+auditions
+briefs
+*.briefs.json
+evals
+tests
+docs
+.claude
+.superpowers
+.evalite
+evalite.db*
