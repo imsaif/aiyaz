@@ -81,6 +81,7 @@ export default defineAgent({
       tracer: new JsonlTracer(settings.traceFile),
       brief: begin.brief,
       start: begin.saved,
+      proof: begin.proof ?? null,
       slug: begin.slug,
       emailKnown: meta.email !== null,
       // Called inside the Conversation's tool-result handling: it only queues, and never throws.

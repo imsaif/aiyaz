@@ -8,12 +8,31 @@ import type { CallMeta } from "./meta.js";
 
 // baseline: the loaded board's time and fact ids, for the worker's compare-and-set saves.
 // Present only when a saved board was loaded.
-export type CallStart = { brief: Brief | null; saved: SavedStart | null; company: string | null; slug: string | null; baseline?: Baseline };
+// proof: on a revisit, the lead brief's findings and screenshots. They are ours, never the
+// visitor's facts, so reloading them cannot undo anything the visitor rejected (2026-10-26:
+// a "Talk again" call had lost them and told the CEO it had found nothing).
+export type CallStart = {
+  brief: Brief | null;
+  saved: SavedStart | null;
+  company: string | null;
+  slug: string | null;
+  baseline?: Baseline;
+  proof?: Brief | null;
+};
 
 export async function callStart(kv: KV | null, meta: CallMeta): Promise<CallStart> {
   const board = await loadBoard(kv, meta.board);
   if (board) {
-    return { brief: null, saved: startFromBoard(board), company: board.company, slug: board.slug ?? meta.slug, baseline: baselineOf(board) };
+    const slug = board.slug ?? meta.slug;
+    const lead = await loadBrief(kv, slug);
+    return {
+      brief: null,
+      saved: startFromBoard(board),
+      company: board.company,
+      slug,
+      baseline: baselineOf(board),
+      ...(lead ? { proof: lead } : {}),
+    };
   }
   const brief = await loadBrief(kv, meta.slug);
   return { brief, saved: null, company: brief?.company ?? null, slug: brief ? meta.slug : null };

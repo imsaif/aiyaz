@@ -33,7 +33,7 @@ const WHO_STEP =
   "This is a call with a company brief. Your opening line has already greeted the company and asked who they are. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`. If the brief already fills some cards, check them together in one short question (\"I understand Earn AI is live with landlords. Is that right?\") and correct any they change. Then work through the facts about them, one at a time, each asked as a question (\"I read that you launched X. Is that right?\"), and then carry on with your questions above. Bring in our findings only as the brief describes.";
 
 const REVISIT_STEP =
-  "This visitor is coming back to their saved brief. Your opening line has already welcomed them back and asked whether to pick up where you left off. Do not ask again for anything the brief already has. Ask about its empty parts first, then any fact still unconfirmed, one at a time, each as a question. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`.";
+  "This visitor is coming back to their saved brief. Your opening line has already welcomed them back and asked whether to pick up where you left off. Do not ask again for anything the brief already has. If our findings are listed below, raise the strongest one first. Then ask about its empty parts, then any fact still unconfirmed, one at a time, each as a question. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`.";
 
 // How the prompt places the caller. A pack with no entry gets no place name.
 const MARKET_WHERE: Record<string, string> = { "uae.v1": " in the UAE" };
@@ -48,6 +48,8 @@ export type PromptOptions = {
   emailKnown?: boolean;
   // "Talk again": the saved board's notes and facts, used instead of the brief.
   saved?: { notes: Notes; known: KnownFact[] } | null;
+  // On a revisit, the lead brief: only its findings and proof are used.
+  proof?: Brief | null;
 };
 
 // Everything the visitor saved, quoted as data. Facts still open are listed as unconfirmed.
@@ -78,7 +80,6 @@ const CARD_LABELS: Record<string, string> = { aiFeature: "What AI should do", us
 // what we found trying their product. Findings are ours, so they are never asked back as facts.
 function briefLines(brief: Brief): string[] {
   const about = aboutFacts(brief);
-  const findings = findingFacts(brief);
   const cards = Object.entries(brief.cards ?? {}).filter(([, v]) => v);
   return [
     `You have a research brief on ${brief.company}.`,
@@ -91,17 +92,28 @@ function briefLines(brief: Brief): string[] {
           ...cards.map(([k, v]) => `- ${CARD_LABELS[k] ?? k}: ${JSON.stringify(v)}`),
         ]
       : []),
-    ...(brief.evidence?.length || brief.file
+    ...proofLines(brief),
+  ];
+}
+
+// What we found trying their product, and the proof on their page. This is why the call exists,
+// so it leads: Imran's live test on 2026-10-26 had Aiyaz follow its generic script instead.
+function proofLines(brief: Brief): string[] {
+  const findings = findingFacts(brief);
+  const shots = brief.evidence ?? [];
+  if (!findings.length && !shots.length && !brief.file) return [];
+  return [
+    "What our team saw when we tried their product from outside. These are OUR observations, not facts about them: never ask them to confirm these, never read them out as a list, and never use them to criticise.",
+    "How to use them:",
+    "- Lead with one. Right after the cards and facts are confirmed, before your other questions, raise the strongest finding as one observation and one question, for example: \"When we tried it, we saw X. How do you catch that today?\"",
+    "- If they ask what you found, or say nothing goes wrong, answer straight away with the strongest finding you have not raised yet. Never say you have nothing.",
+    "- Raise at most two in the whole call unless they ask for more. Then carry on with your questions, tying them to what they said about the finding.",
+    ...findings.map((f) => `- Finding: ${f.text} (source: ${f.source})`),
+    ...(shots.length || brief.file
       ? [
-          "Their page shows proof of what we saw, so they can check it for themselves. When you raise a finding that one of these shows, point to it, for example \"It's in the first screenshot on your page\". Never describe a screenshot beyond its caption.",
-          ...(brief.evidence ?? []).map((e, i) => `- Screenshot ${i + 1}: ${e.caption}`),
+          "Their page shows proof they can check themselves. When a finding is in a screenshot, point to it, for example \"It's in the first screenshot on your page\". Never describe a screenshot beyond its caption.",
+          ...shots.map((e, i) => `- Screenshot ${i + 1}: ${e.caption}`),
           ...(brief.file ? [`- A file they can download and run in their own product: ${brief.file.label}`] : []),
-        ]
-      : []),
-    ...(findings.length
-      ? [
-          "What our team saw when we tried their product from outside. These are OUR observations, not facts about them: never ask them to confirm these, never read them out as a list, and never use them to criticise. Raise at most two, the ones closest to what they tell you matters, each as one observation followed by a question about how they handle it today, for example: \"When we tried it, we saw X. How do you catch that today?\" If they are not interested, drop them.",
-          ...findings.map((f) => `- ${f.text} (source: ${f.source})`),
         ]
       : []),
   ];
@@ -117,8 +129,9 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null, opts:
   const sha8 = createHash("sha256").update(template).update(pack).update(languageRule).digest("hex").slice(0, 8);
   const saved = opts.saved ?? null;
   const emailKnown = opts.emailKnown ?? !brief;
+  const proofFrom = saved ? (opts.proof ?? null) : brief;
   const briefSection = saved
-    ? savedSection(saved)
+    ? [savedSection(saved), ...(proofFrom ? proofLines(proofFrom) : [])].join("\n")
     : brief
       ? briefLines(brief).join("\n")
       : "You have no research brief. Everything you know about their company comes from this conversation.";

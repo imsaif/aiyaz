@@ -69,3 +69,23 @@ describe("brief evidence", () => {
     expect(text).toContain("A file they can download and run in their own product: our test rent roll");
   });
 });
+
+describe("findings on a revisit and when asked", () => {
+  const saved = { notes: emptyNotes(brief), known: [] };
+  it("a resumed call still carries our findings and proof", () => {
+    const text = buildSystemPrompt(loadSettings(), null, { saved, proof: { ...brief, evidence: [{ src: "/e/acme-7k2q/1.png", caption: "the review screen" }] } }).text;
+    expect(text).toContain("Finding: a rent written with a k was read a thousand times too low");
+    expect(text).toContain("Screenshot 1: the review screen");
+    expect(text).toContain("raise the strongest one first");
+  });
+
+  it("leads with a finding and never claims to have found nothing", () => {
+    const text = buildSystemPrompt(loadSettings(), brief).text;
+    expect(text).toContain("Lead with one");
+    expect(text).toContain("Never say you have nothing");
+  });
+
+  it("a resumed call without a lead brief has no findings section", () => {
+    expect(buildSystemPrompt(loadSettings(), null, { saved }).text).not.toContain("OUR observations");
+  });
+});

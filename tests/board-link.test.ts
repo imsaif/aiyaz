@@ -450,6 +450,8 @@ describe("callStart", () => {
     await saveBoard(kv, meta.board, saved);
     const start = await callStart(kv, meta);
     expect(start.brief).toBeNull();
+    // Our findings and proof still come along (never the facts, which the saved board owns).
+    expect(start.proof?.company).toBe("Acme");
     expect(start.saved?.notes.unconfirmedFacts).toEqual(["launched an AI assistant for support"]);
     expect(start.saved?.known.map((f) => f.id)).toEqual(["b1"]);
     expect(start.company).toBe("Acme");

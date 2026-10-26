@@ -101,6 +101,8 @@ export type ConversationDeps = {
   // "Talk again": the saved board's notes and facts. Used instead of the brief, so facts the
   // visitor rejected last time stay rejected.
   start?: SavedStart | null;
+  // On a revisit: the lead brief, used only for our findings and proof (see call-start.ts).
+  proof?: Brief | null;
   // The lead tag, kept on the board so a revisit from another device stays a lead call.
   slug?: string | null;
   // The token carried the visitor's email, so the ending does not ask for it.
@@ -155,7 +157,7 @@ export class Conversation {
     this.tracer = deps.tracer;
     this.brief = deps.brief ?? null;
     const saved = deps.start ?? null;
-    this.prompt = buildSystemPrompt(deps.settings, this.brief, { emailKnown: deps.emailKnown, saved });
+    this.prompt = buildSystemPrompt(deps.settings, this.brief, { emailKnown: deps.emailKnown, saved, proof: deps.proof ?? null });
     this.revisit = saved !== null;
     this.slug = deps.slug ?? null;
     this.onBoard = deps.onBoard ?? (() => undefined);
