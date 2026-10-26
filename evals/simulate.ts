@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { loadSettings } from "../src/config.js";
+import { forCountry, loadSettings, type SprintPrice } from "../src/config.js";
 import { Conversation, type EndReason, type Turn } from "../src/conversation.js";
 import { AnthropicLLM, withModel } from "../src/llm.js";
 import type { Notes } from "../src/notes.js";
@@ -11,6 +11,8 @@ export type RunResult = {
   notes: Notes;
   endReason: EndReason | "prospect_left" | "max_prospect_turns";
   costUsd: number;
+  // The price this visitor's country is allowed to hear.
+  price: SprintPrice;
 };
 
 const MAX_PROSPECT_TURNS = 8;
@@ -25,13 +27,19 @@ Reply with only what you would say, in one to three sentences. When you would le
 
 // Plays one persona against the real Aiyaz and returns the whole conversation.
 export async function runPersona(persona: Persona): Promise<RunResult> {
-  const settings = loadSettings();
-  const tracer = new JsonlTracer("eval-traces.jsonl");
+  const settings = forCountry(loadSettings(), persona.country ?? null);
   const convo = new Conversation({
     settings,
     llm: new AnthropicLLM(settings.requestTimeoutMs),
-    tracer,
+    tracer: new JsonlTracer("eval-traces.jsonl"),
     brief: persona.brief ?? null,
+  });
+  const result = (endReason: RunResult["endReason"]): RunResult => ({
+    transcript: convo.transcript,
+    notes: convo.notes,
+    endReason,
+    costUsd: convo.costUsd,
+    price: settings.sprintPrice,
   });
   const simulator = new Anthropic({ timeout: settings.requestTimeoutMs, maxRetries: 2 });
 
@@ -39,30 +47,27 @@ export async function runPersona(persona: Persona): Promise<RunResult> {
   const seen: Anthropic.MessageParam[] = [{ role: "user", content: convo.start() }];
 
   for (let i = 0; i < MAX_PROSPECT_TURNS; i++) {
-    const res = await simulator.messages.create(
-      withModel(
-        { model: settings.simulatorModel, max_tokens: 300, system: simulatorSystem(persona), messages: seen },
-        settings.simulatorModel,
-      ),
-    );
-    const said = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join(" ")
-      .trim();
-    if (said === END || said.includes(END)) {
-      return { transcript: convo.transcript, notes: convo.notes, endReason: "prospect_left", costUsd: convo.costUsd };
+    let said = "";
+    if (!persona.silent) {
+      const res = await simulator.messages.create(
+        withModel(
+          { model: settings.simulatorModel, max_tokens: 300, system: simulatorSystem(persona), messages: seen },
+          settings.simulatorModel,
+        ),
+      );
+      said = res.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join(" ")
+        .trim();
+      if (said === END || said.includes(END)) return result("prospect_left");
+      seen.push({ role: "assistant", content: said });
     }
-    seen.push({ role: "assistant", content: said });
+    // A silent visitor sends "", which Conversation records as "(no answer)".
     const reply = await convo.reply(said);
     if (convo.ended) break;
-    seen.push({ role: "user", content: reply });
+    if (!persona.silent) seen.push({ role: "user", content: reply });
   }
 
-  return {
-    transcript: convo.transcript,
-    notes: convo.notes,
-    endReason: convo.endReason ?? "max_prospect_turns",
-    costUsd: convo.costUsd,
-  };
+  return result(convo.endReason ?? "max_prospect_turns");
 }

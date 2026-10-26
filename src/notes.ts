@@ -1,43 +1,79 @@
 // What Aiyaz learns, kept as structured fields rather than free text.
+import { EMAIL } from "./voice/meta.js";
 
-export type BriefFact = { text: string; source: string };
-export type Brief = { company: string; facts: BriefFact[] };
+// "about": a fact about the company that Aiyaz checks with them ("I read that... Is that right?").
+// "finding": what we saw when we tried their product from outside. Never asked back as a fact to
+// confirm; Aiyaz raises one or two as observations. Missing kind means "about" (older briefs).
+export type BriefFact = { text: string; source: string; kind?: "about" | "finding" };
+// Cards the research already answers, shown filled on the page and confirmed on the call.
+export type BriefCards = { aiFeature?: string; users?: string; stage?: string };
+// Proof on the lead's page: screenshots from our test, and the test file they can run themselves.
+// Paths are on getaiengineer.dev under /e/<slug>/, served only to whoever has the lead link.
+export type BriefEvidence = { src: string; caption: string };
+export type BriefFile = { href: string; label: string };
+export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile };
+
+export const aboutFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind !== "finding");
+export const findingFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind === "finding");
+
+// How far along the initiative is. The model may only record one of these; a visitor's
+// own edit on the page may say more ("pilot with two customers").
+export const STAGES = ["idea", "pilot", "live"] as const;
 
 export type Notes = {
+  company: string | null;
   product: string | null;
   users: string | null;
   aiFeature: string | null;
+  stage: string | null;
   owner: string | null;
   symptoms: string[];
   tried: string[];
   confirmedFacts: string[];
   unconfirmedFacts: string[];
+  visitor_email: string | null;
+  visitor_name: string | null;
+  visitor_role: string | null;
 };
 
 export function emptyNotes(brief: Brief | null): Notes {
   return {
+    company: brief ? brief.company : null,
     product: null,
-    users: null,
-    aiFeature: null,
+    users: brief?.cards?.users ?? null,
+    aiFeature: brief?.cards?.aiFeature ?? null,
+    stage: brief?.cards?.stage ?? null,
     owner: null,
     symptoms: [],
     tried: [],
     confirmedFacts: [],
-    // Everything in a brief starts unconfirmed until the prospect says so.
-    unconfirmedFacts: brief ? brief.facts.map((f) => f.text) : [],
+    // Every fact about them starts unconfirmed until the prospect says so. Findings are ours,
+    // not theirs to confirm, so they never enter this list.
+    unconfirmedFacts: aboutFacts(brief).map((f) => f.text),
+    visitor_email: null,
+    visitor_name: null,
+    visitor_role: null,
   };
 }
 
 export type NotesUpdate = {
+  company?: string;
   product?: string;
   users?: string;
   ai_feature?: string;
+  stage?: string;
   owner?: string;
   add_symptoms?: string[];
   add_tried?: string[];
   confirm_facts?: string[];
   reject_facts?: string[];
+  visitor_email?: string;
+  visitor_name?: string;
+  visitor_role?: string;
 };
+
+// Short, single-line text for fields a model fills from speech.
+const oneLine = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
 
 const addUnique = (list: string[], items: string[] | undefined) => {
   for (const item of items ?? []) {
@@ -48,10 +84,17 @@ const addUnique = (list: string[], items: string[] | undefined) => {
 
 export function applyNotesUpdate(notes: Notes, update: NotesUpdate): Notes {
   const next: Notes = structuredClone(notes);
+  if (oneLine(update.company)) next.company = oneLine(update.company);
   if (update.product?.trim()) next.product = update.product.trim();
   if (update.users?.trim()) next.users = update.users.trim();
   if (update.ai_feature?.trim()) next.aiFeature = update.ai_feature.trim();
+  if (typeof update.stage === "string" && (STAGES as readonly string[]).includes(update.stage)) next.stage = update.stage;
   if (update.owner?.trim()) next.owner = update.owner.trim();
+  if (oneLine(update.visitor_name)) next.visitor_name = oneLine(update.visitor_name);
+  if (oneLine(update.visitor_role)) next.visitor_role = oneLine(update.visitor_role);
+  // Same check as the token function. An invalid value never replaces a stored one.
+  const email = typeof update.visitor_email === "string" ? update.visitor_email.trim().toLowerCase() : "";
+  if (EMAIL.test(email)) next.visitor_email = email;
   addUnique(next.symptoms, update.add_symptoms);
   addUnique(next.tried, update.add_tried);
   // Only facts already on the unconfirmed list can be confirmed. The model
