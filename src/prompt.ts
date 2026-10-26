@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { KnownFact } from "./board.js";
 import { scrubForbiddenNames } from "./guards.js";
-import type { Brief, Notes } from "./notes.js";
+import { aboutFacts, findingFacts, type Brief, type Notes } from "./notes.js";
 import type { Settings, SprintPrice } from "./config.js";
 
 export const PROMPT_NAME = "system";
@@ -30,7 +30,7 @@ const EMAIL_ASK =
 const EMAIL_KNOWN = "End it by asking whether you got it right.";
 
 const WHO_STEP =
-  "This is a call with a company brief. Your opening line has already greeted the company and asked who they are. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`. Then work through the items in the brief, one at a time, each asked as a question (\"I read that you launched X. Is that right?\"), and then carry on with your questions above.";
+  "This is a call with a company brief. Your opening line has already greeted the company and asked who they are. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`. If the brief already fills some cards, check them together in one short question (\"I understand Earn AI is live with landlords. Is that right?\") and correct any they change. Then work through the facts about them, one at a time, each asked as a question (\"I read that you launched X. Is that right?\"), and then carry on with your questions above. Bring in our findings only as the brief describes.";
 
 const REVISIT_STEP =
   "This visitor is coming back to their saved brief. Your opening line has already welcomed them back and asked whether to pick up where you left off. Do not ask again for anything the brief already has. Ask about its empty parts first, then any fact still unconfirmed, one at a time, each as a question. When they tell you their name or role, record it with `record_notes` `visitor_name` and `visitor_role`.";
@@ -72,6 +72,34 @@ function savedSection(saved: { notes: Notes; known: KnownFact[] }): string {
   ].join("\n");
 }
 
+const CARD_LABELS: Record<string, string> = { aiFeature: "What AI should do", users: "Who it's for", stage: "Stage" };
+
+// A lead's research brief: facts about them to confirm, cards our research already fills, and
+// what we found trying their product. Findings are ours, so they are never asked back as facts.
+function briefLines(brief: Brief): string[] {
+  const about = aboutFacts(brief);
+  const findings = findingFacts(brief);
+  const cards = Object.entries(brief.cards ?? {}).filter(([, v]) => v);
+  return [
+    `You have a research brief on ${brief.company}.`,
+    ...(about.length
+      ? ["Facts about them. Every one is UNCONFIRMED until the prospect confirms it:", ...about.map((f) => `- ${f.text} (source: ${f.source})`)]
+      : []),
+    ...(cards.length
+      ? [
+          "Cards our research already filled on their screen (to confirm, not to ask from scratch):",
+          ...cards.map(([k, v]) => `- ${CARD_LABELS[k] ?? k}: ${JSON.stringify(v)}`),
+        ]
+      : []),
+    ...(findings.length
+      ? [
+          "What our team saw when we tried their product from outside. These are OUR observations, not facts about them: never ask them to confirm these, never read them out as a list, and never use them to criticise. Raise at most two, the ones closest to what they tell you matters, each as one observation followed by a question about how they handle it today, for example: \"When we tried it, we saw X. How do you catch that today?\" If they are not interested, drop them.",
+          ...findings.map((f) => `- ${f.text} (source: ${f.source})`),
+        ]
+      : []),
+  ];
+}
+
 // The id records name, version, pack and a content hash over template and pack,
 // so an edited file that kept its version number still shows up as different in every trace.
 export function buildSystemPrompt(settings: Settings, brief: Brief | null, opts: PromptOptions = {}): BuiltPrompt {
@@ -85,10 +113,7 @@ export function buildSystemPrompt(settings: Settings, brief: Brief | null, opts:
   const briefSection = saved
     ? savedSection(saved)
     : brief
-      ? [
-          `You have a research brief on ${brief.company}. Every item below is UNCONFIRMED until the prospect confirms it:`,
-          ...brief.facts.map((f) => `- ${f.text} (source: ${f.source})`),
-        ].join("\n")
+      ? briefLines(brief).join("\n")
       : "You have no research brief. Everything you know about their company comes from this conversation.";
   const text = template
     .replaceAll("{{agentName}}", settings.agentName)

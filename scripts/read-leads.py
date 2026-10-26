@@ -10,9 +10,15 @@ FACTS = "Aiyaz brief facts (each with source)"
 # with the facts in an `aiyaz_facts` column. The old .xlsx path below still works.
 if sys.argv[1].endswith(".csv"):
     with open(sys.argv[1], newline="", encoding="utf-8") as fh:
-        out = [{"company": r["company"].strip(), "facts": r["aiyaz_facts"]}
-               for r in csv.DictReader(fh)
-               if (r.get("company") or "").strip() and (r.get("aiyaz_facts") or "").strip()]
+        out = []
+        for r in csv.DictReader(fh):
+            if not (r.get("company") or "").strip() or not (r.get("aiyaz_facts") or "").strip():
+                continue
+            # Cards the research already answers, prefilled on the page (optional columns).
+            cards = {k: (r.get(col) or "").strip() for k, col in
+                     (("aiFeature", "aiyaz_ai_feature"), ("users", "aiyaz_users"), ("stage", "aiyaz_stage"))}
+            out.append({"company": r["company"].strip(), "facts": r["aiyaz_facts"],
+                        "cards": {k: v for k, v in cards.items() if v}})
     print(json.dumps(out))
     sys.exit(0)
 

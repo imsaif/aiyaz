@@ -5,7 +5,7 @@ import { BRIEF_KEY, isValidSlug, toBrief, usableFact } from "../src/briefs.js";
 import type { KV } from "../src/kv.js";
 import type { Brief, BriefFact } from "../src/notes.js";
 
-export type LeadRow = { company: string; facts: string };
+export type LeadRow = { company: string; facts: string; cards?: Record<string, string> };
 export type PlannedBrief = { company: string; slug: string; isNew: boolean; brief: Brief | null; dropped: string[]; skipped?: string };
 
 export const SLUG_FOR_KEY = (key: string) => `aiyaz:slug-for:${key}`;
@@ -19,7 +19,10 @@ export function parseFactsCell(cell: string): { facts: BriefFact[]; dropped: str
     const part = raw.trim().replace(/\.$/, "");
     if (!part) continue;
     const m = part.match(/^(.*\S)\s*\(([^()]+)\)$/);
-    const fact = m ? { text: m[1]!.trim(), source: m[2]!.trim() } : null;
+    // "finding: ..." marks what we saw testing their product, not a fact about them.
+    const finding = m ? /^finding:\s*/i.test(m[1]!) : false;
+    const text = m ? m[1]!.replace(/^finding:\s*/i, "").trim() : "";
+    const fact: BriefFact | null = m ? { text, source: m[2]!.trim(), ...(finding ? { kind: "finding" as const } : {}) } : null;
     if (fact && usableFact(fact)) facts.push(fact);
     else dropped.push(part);
   }
@@ -97,7 +100,7 @@ export async function planBriefs(
       company: row.company,
       slug: existing ?? newSlug(row.company, rand),
       isNew: !existing,
-      brief: toBrief({ company: row.company, facts }),
+      brief: toBrief({ company: row.company, facts, cards: row.cards }),
       dropped,
     });
   }

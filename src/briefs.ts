@@ -3,7 +3,7 @@
 // Nothing here reads files. A bad or missing brief makes the call a homepage call.
 import { moneyAmounts } from "./guards.js";
 import type { KV } from "./kv.js";
-import type { Brief, BriefFact } from "./notes.js";
+import { STAGES, type Brief, type BriefCards, type BriefFact } from "./notes.js";
 
 export const BRIEF_KEY = (slug: string) => `aiyaz:brief:${slug}`;
 
@@ -32,15 +32,31 @@ export function usableFact(f: unknown): f is BriefFact {
   return moneyAmounts(text).length === 0 && !WORDED_BIG_NUMBER.test(text);
 }
 
+const MAX_CARD_CHARS = 200;
+// A prefilled card is shown on the page and read back on the call, so it follows the fact rules
+// (no money). Stage must be one the model itself could record.
+function toCards(v: unknown): BriefCards | undefined {
+  if (!isObj(v)) return undefined;
+  const out: BriefCards = {};
+  for (const k of ["aiFeature", "users", "stage"] as const) {
+    const t = typeof v[k] === "string" ? (v[k] as string).trim() : "";
+    if (!t || t.length > MAX_CARD_CHARS || moneyAmounts(t).length || WORDED_BIG_NUMBER.test(t)) continue;
+    if (k === "stage" && !(STAGES as readonly string[]).includes(t.toLowerCase())) continue;
+    out[k] = k === "stage" ? t.toLowerCase() : t;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function toBrief(v: unknown): Brief | null {
   if (!isObj(v) || typeof v.company !== "string" || !Array.isArray(v.facts)) return null;
   const company = v.company.trim();
   if (!company || company.length > MAX_COMPANY_CHARS) return null;
   const facts = v.facts
     .filter(usableFact)
-    .map((f) => ({ text: f.text.trim(), source: f.source.trim() }))
+    .map((f): BriefFact => ({ text: f.text.trim(), source: f.source.trim(), ...(f.kind === "finding" ? { kind: "finding" } : {}) }))
     .slice(0, MAX_FACTS);
-  return facts.length ? { company, facts } : null;
+  const cards = toCards(v.cards);
+  return facts.length ? { company, facts, ...(cards ? { cards } : {}) } : null;
 }
 
 export async function loadBrief(kv: KV | null, slug: string | null): Promise<Brief | null> {

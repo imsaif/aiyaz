@@ -3,7 +3,7 @@
 // Twin of board-core.js in the getaiengineer repo: same card keys, same edit rules, same edit table.
 import { isValidSlug } from "./briefs.js";
 import type { KV } from "./kv.js";
-import { emptyNotes, type Brief, type Notes } from "./notes.js";
+import { aboutFacts, emptyNotes, type Brief, type Notes } from "./notes.js";
 
 export const CARD_KEYS = ["company", "aiFeature", "users", "stage", "owner", "blockers", "tried"] as const;
 export type CardKey = (typeof CARD_KEYS)[number];
@@ -18,7 +18,7 @@ export const CARD_LABELS: Record<CardKey, string> = {
   stage: "Stage",
   owner: "Who owns it",
   blockers: "What's blocking it",
-  tried: "What they've tried",
+  tried: "What you've tried",
 };
 
 export const MAX_CARD_CHARS = 200;
@@ -77,7 +77,7 @@ export function cleanValue(v: unknown): string | null {
 }
 
 export function knownFromBrief(brief: Brief | null): KnownFact[] {
-  return (brief?.facts ?? []).map((f, i) => ({ id: `b${i + 1}`, text: f.text, source: f.source, kind: "brief" }));
+  return aboutFacts(brief).map((f, i) => ({ id: `b${i + 1}`, text: f.text, source: f.source, kind: "brief" }));
 }
 
 export function boardFromNotes(notes: Notes, known: KnownFact[], now: number, extra: BoardExtra): Board {

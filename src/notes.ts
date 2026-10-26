@@ -1,8 +1,16 @@
 // What Aiyaz learns, kept as structured fields rather than free text.
 import { EMAIL } from "./voice/meta.js";
 
-export type BriefFact = { text: string; source: string };
-export type Brief = { company: string; facts: BriefFact[] };
+// "about": a fact about the company that Aiyaz checks with them ("I read that... Is that right?").
+// "finding": what we saw when we tried their product from outside. Never asked back as a fact to
+// confirm; Aiyaz raises one or two as observations. Missing kind means "about" (older briefs).
+export type BriefFact = { text: string; source: string; kind?: "about" | "finding" };
+// Cards the research already answers, shown filled on the page and confirmed on the call.
+export type BriefCards = { aiFeature?: string; users?: string; stage?: string };
+export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards };
+
+export const aboutFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind !== "finding");
+export const findingFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind === "finding");
 
 // How far along the initiative is. The model may only record one of these; a visitor's
 // own edit on the page may say more ("pilot with two customers").
@@ -28,15 +36,16 @@ export function emptyNotes(brief: Brief | null): Notes {
   return {
     company: brief ? brief.company : null,
     product: null,
-    users: null,
-    aiFeature: null,
-    stage: null,
+    users: brief?.cards?.users ?? null,
+    aiFeature: brief?.cards?.aiFeature ?? null,
+    stage: brief?.cards?.stage ?? null,
     owner: null,
     symptoms: [],
     tried: [],
     confirmedFacts: [],
-    // Everything in a brief starts unconfirmed until the prospect says so.
-    unconfirmedFacts: brief ? brief.facts.map((f) => f.text) : [],
+    // Every fact about them starts unconfirmed until the prospect says so. Findings are ours,
+    // not theirs to confirm, so they never enter this list.
+    unconfirmedFacts: aboutFacts(brief).map((f) => f.text),
     visitor_email: null,
     visitor_name: null,
     visitor_role: null,
