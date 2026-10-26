@@ -17,8 +17,16 @@ if sys.argv[1].endswith(".csv"):
             # Cards the research already answers, prefilled on the page (optional columns).
             cards = {k: (r.get(col) or "").strip() for k, col in
                      (("aiFeature", "aiyaz_ai_feature"), ("users", "aiyaz_users"), ("stage", "aiyaz_stage"))}
-            out.append({"company": r["company"].strip(), "facts": r["aiyaz_facts"],
-                        "cards": {k: v for k, v in cards.items() if v}})
+            row = {"company": r["company"].strip(), "facts": r["aiyaz_facts"],
+                   "cards": {k: v for k, v in cards.items() if v}}
+            # Proof on their page: "src | caption; src | caption" and "href | label".
+            ev = [p.split("|", 1) for p in (r.get("aiyaz_evidence") or "").split(";") if "|" in p]
+            if ev:
+                row["evidence"] = [{"src": s.strip(), "caption": c.strip()} for s, c in ev]
+            fl = (r.get("aiyaz_file") or "").split("|", 1)
+            if len(fl) == 2:
+                row["file"] = {"href": fl[0].strip(), "label": fl[1].strip()}
+            out.append(row)
     print(json.dumps(out))
     sys.exit(0)
 

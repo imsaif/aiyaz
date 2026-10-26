@@ -5,7 +5,13 @@ import { BRIEF_KEY, isValidSlug, toBrief, usableFact } from "../src/briefs.js";
 import type { KV } from "../src/kv.js";
 import type { Brief, BriefFact } from "../src/notes.js";
 
-export type LeadRow = { company: string; facts: string; cards?: Record<string, string> };
+export type LeadRow = {
+  company: string;
+  facts: string;
+  cards?: Record<string, string>;
+  evidence?: { src: string; caption: string }[];
+  file?: { href: string; label: string };
+};
 export type PlannedBrief = { company: string; slug: string; isNew: boolean; brief: Brief | null; dropped: string[]; skipped?: string };
 
 export const SLUG_FOR_KEY = (key: string) => `aiyaz:slug-for:${key}`;
@@ -100,7 +106,7 @@ export async function planBriefs(
       company: row.company,
       slug: existing ?? newSlug(row.company, rand),
       isNew: !existing,
-      brief: toBrief({ company: row.company, facts, cards: row.cards }),
+      brief: toBrief({ company: row.company, facts, cards: row.cards, evidence: row.evidence, file: row.file }),
       dropped,
     });
   }

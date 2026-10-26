@@ -7,7 +7,11 @@ import { EMAIL } from "./voice/meta.js";
 export type BriefFact = { text: string; source: string; kind?: "about" | "finding" };
 // Cards the research already answers, shown filled on the page and confirmed on the call.
 export type BriefCards = { aiFeature?: string; users?: string; stage?: string };
-export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards };
+// Proof on the lead's page: screenshots from our test, and the test file they can run themselves.
+// Paths are on getaiengineer.dev under /e/<slug>/, served only to whoever has the lead link.
+export type BriefEvidence = { src: string; caption: string };
+export type BriefFile = { href: string; label: string };
+export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile };
 
 export const aboutFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind !== "finding");
 export const findingFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind === "finding");

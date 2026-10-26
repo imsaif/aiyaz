@@ -53,3 +53,19 @@ describe("brief findings and cards", () => {
     expect(facts).not.toContain("thousand times");
   });
 });
+
+describe("brief evidence", () => {
+  const ev = [{ src: "/e/acme-7k2q/1.png", caption: "the review screen after our upload" }];
+  it("keeps evidence and a test file on the site's /e/ path only", () => {
+    const b = toBrief({ ...brief, evidence: [...ev, { src: "https://evil.example/x.png", caption: "x" }], file: { href: "/e/acme-7k2q/test.csv", label: "our test rent roll" } });
+    expect(b?.evidence).toEqual(ev);
+    expect(b?.file).toEqual({ href: "/e/acme-7k2q/test.csv", label: "our test rent roll" });
+    expect(toBrief({ ...brief, file: { href: "/elsewhere.csv", label: "x" } })?.file).toBeUndefined();
+  });
+
+  it("tells the model to point to the screenshots, by number", () => {
+    const text = buildSystemPrompt(loadSettings(), { ...brief, evidence: ev, file: { href: "/e/acme-7k2q/t.csv", label: "our test rent roll" } }).text;
+    expect(text).toContain("Screenshot 1: the review screen after our upload");
+    expect(text).toContain("A file they can download and run in their own product: our test rent roll");
+  });
+});

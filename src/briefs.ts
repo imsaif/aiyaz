@@ -3,7 +3,7 @@
 // Nothing here reads files. A bad or missing brief makes the call a homepage call.
 import { moneyAmounts } from "./guards.js";
 import type { KV } from "./kv.js";
-import { STAGES, type Brief, type BriefCards, type BriefFact } from "./notes.js";
+import { STAGES, type Brief, type BriefCards, type BriefEvidence, type BriefFact, type BriefFile } from "./notes.js";
 
 export const BRIEF_KEY = (slug: string) => `aiyaz:brief:${slug}`;
 
@@ -47,6 +47,27 @@ function toCards(v: unknown): BriefCards | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+// Evidence lives on the site under /e/<slug>/<file>; nothing else is accepted, so a brief can never
+// point the page at another site. Captions are read aloud, so they follow the fact rules (no money).
+const EVIDENCE_PATH = /^\/e\/[a-z0-9-]{1,40}\/[A-Za-z0-9._-]{1,80}$/;
+const MAX_EVIDENCE = 4;
+const okCaption = (t: unknown): t is string =>
+  typeof t === "string" && t.trim().length > 0 && t.trim().length <= MAX_FACT_CHARS && !moneyAmounts(t).length && !WORDED_BIG_NUMBER.test(t);
+
+function toEvidence(v: unknown): BriefEvidence[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v
+    .filter((e): e is Record<string, unknown> => isObj(e) && typeof e.src === "string" && EVIDENCE_PATH.test(e.src) && okCaption(e.caption))
+    .map((e) => ({ src: e.src as string, caption: (e.caption as string).trim() }))
+    .slice(0, MAX_EVIDENCE);
+  return out.length ? out : undefined;
+}
+
+function toFile(v: unknown): BriefFile | undefined {
+  if (!isObj(v) || typeof v.href !== "string" || !EVIDENCE_PATH.test(v.href) || !okCaption(v.label)) return undefined;
+  return { href: v.href, label: (v.label as string).trim() };
+}
+
 export function toBrief(v: unknown): Brief | null {
   if (!isObj(v) || typeof v.company !== "string" || !Array.isArray(v.facts)) return null;
   const company = v.company.trim();
@@ -56,7 +77,10 @@ export function toBrief(v: unknown): Brief | null {
     .map((f): BriefFact => ({ text: f.text.trim(), source: f.source.trim(), ...(f.kind === "finding" ? { kind: "finding" } : {}) }))
     .slice(0, MAX_FACTS);
   const cards = toCards(v.cards);
-  return facts.length ? { company, facts, ...(cards ? { cards } : {}) } : null;
+  const evidence = toEvidence(v.evidence);
+  const file = toFile(v.file);
+  if (!facts.length) return null;
+  return { company, facts, ...(cards ? { cards } : {}), ...(evidence ? { evidence } : {}), ...(file ? { file } : {}) };
 }
 
 export async function loadBrief(kv: KV | null, slug: string | null): Promise<Brief | null> {

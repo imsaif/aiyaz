@@ -91,6 +91,13 @@ function briefLines(brief: Brief): string[] {
           ...cards.map(([k, v]) => `- ${CARD_LABELS[k] ?? k}: ${JSON.stringify(v)}`),
         ]
       : []),
+    ...(brief.evidence?.length || brief.file
+      ? [
+          "Their page shows proof of what we saw, so they can check it for themselves. When you raise a finding that one of these shows, point to it, for example \"It's in the first screenshot on your page\". Never describe a screenshot beyond its caption.",
+          ...(brief.evidence ?? []).map((e, i) => `- Screenshot ${i + 1}: ${e.caption}`),
+          ...(brief.file ? [`- A file they can download and run in their own product: ${brief.file.label}`] : []),
+        ]
+      : []),
     ...(findings.length
       ? [
           "What our team saw when we tried their product from outside. These are OUR observations, not facts about them: never ask them to confirm these, never read them out as a list, and never use them to criticise. Raise at most two, the ones closest to what they tell you matters, each as one observation followed by a question about how they handle it today, for example: \"When we tried it, we saw X. How do you catch that today?\" If they are not interested, drop them.",
