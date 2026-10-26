@@ -1,5 +1,5 @@
 // Pushes private lead briefs from the tracker to Upstash. Dry run unless --write.
-//   AIYAZ_LEADS_FILE=/path/outside/this/repo/tracker.xlsx pnpm briefs              prints the plan
+//   AIYAZ_LEADS_FILE=~/find-money/data/clients.csv pnpm briefs                     prints the plan (.xlsx still works)
 //   AIYAZ_LEADS_FILE=... pnpm briefs --only "<company>" --write                    stores one brief
 //   pnpm briefs --acme-test --write                                               stores the made-up Acme brief
 import { spawnSync } from "node:child_process";
@@ -29,7 +29,7 @@ if (args.includes("--acme-test")) {
 
 const file = process.env.AIYAZ_LEADS_FILE;
 if (!file) {
-  console.error("Set AIYAZ_LEADS_FILE to the lead tracker .xlsx (kept outside this repo).");
+  console.error("Set AIYAZ_LEADS_FILE to the lead tracker: find-money data/clients.csv (or the old .xlsx), kept outside this repo.");
   process.exit(2);
 }
 const read = spawnSync("python3", ["scripts/read-leads.py", file], { encoding: "utf8" });
