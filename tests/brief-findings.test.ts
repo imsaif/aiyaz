@@ -11,10 +11,10 @@ import { buildSystemPrompt } from "../src/prompt.js";
 const brief: Brief = {
   company: "Acme",
   facts: [
-    { text: "launched an AI assistant for landlords", source: "acme.example/ai" },
-    { text: "a rent written with a k was read a thousand times too low", source: "our test", kind: "finding" },
+    { text: "launched an AI assistant for clinics", source: "acme.example/ai" },
+    { text: "a date written day-first was read as month-first", source: "our test", kind: "finding" },
   ],
-  cards: { aiFeature: "drafts collection follow-ups", users: "landlords", stage: "live" },
+  cards: { aiFeature: "drafts appointment reminders", users: "clinics", stage: "live" },
 };
 
 describe("brief findings and cards", () => {
@@ -29,26 +29,26 @@ describe("brief findings and cards", () => {
   it("keeps kind and valid cards, and drops a stage the model could not record", () => {
     const b = toBrief({ ...brief, cards: { ...brief.cards, stage: "scaling" } });
     expect(b?.facts[1]?.kind).toBe("finding");
-    expect(b?.cards).toEqual({ aiFeature: "drafts collection follow-ups", users: "landlords" });
+    expect(b?.cards).toEqual({ aiFeature: "drafts appointment reminders", users: "clinics" });
   });
 
   it("drops a card that carries money", () => {
-    expect(toBrief({ ...brief, cards: { users: "landlords paying AED 90,000" } })?.cards).toBeUndefined();
+    expect(toBrief({ ...brief, cards: { users: "clinics paying AED 90,000" } })?.cards).toBeUndefined();
   });
 
   it("prefills cards but never puts findings among the facts to confirm or on the board", () => {
     const n = emptyNotes(brief);
-    expect(n.aiFeature).toBe("drafts collection follow-ups");
+    expect(n.aiFeature).toBe("drafts appointment reminders");
     expect(n.stage).toBe("live");
-    expect(n.unconfirmedFacts).toEqual(["launched an AI assistant for landlords"]);
-    expect(knownFromBrief(brief).map((f) => f.text)).toEqual(["launched an AI assistant for landlords"]);
+    expect(n.unconfirmedFacts).toEqual(["launched an AI assistant for clinics"]);
+    expect(knownFromBrief(brief).map((f) => f.text)).toEqual(["launched an AI assistant for clinics"]);
   });
 
   it("tells the model findings are our observations, not facts to confirm", () => {
     const text = buildSystemPrompt(loadSettings(), brief).text;
     expect(text).toContain("These are OUR observations");
     expect(text).toContain("Raise at most two");
-    expect(text).toContain('What AI should do: "drafts collection follow-ups"');
+    expect(text).toContain('What AI should do: "drafts appointment reminders"');
     const facts = text.slice(text.indexOf("Facts about them"), text.indexOf("Cards our research"));
     expect(facts).not.toContain("thousand times");
   });
@@ -74,7 +74,7 @@ describe("findings on a revisit and when asked", () => {
   const saved = { notes: emptyNotes(brief), known: [] };
   it("a resumed call still carries our findings and proof", () => {
     const text = buildSystemPrompt(loadSettings(), null, { saved, proof: { ...brief, evidence: [{ src: "/e/acme-7k2q/1.png", caption: "the review screen" }] } }).text;
-    expect(text).toContain("Finding: a rent written with a k was read a thousand times too low");
+    expect(text).toContain("Finding: a date written day-first was read as month-first");
     expect(text).toContain("Screenshot 1: the review screen");
     expect(text).toContain("raise the strongest one first");
   });
