@@ -1,5 +1,7 @@
-// The token function on the site puts { country, slug?, email?, day, reservedUsd, board } in the
-// dispatch metadata: day and reservedUsd say which spend key it reserved on, and how much.
+// The token function on the site puts { country, slug?, email?, day, reservedUsd, board, via? } in
+// the dispatch metadata: day and reservedUsd say which spend key it reserved on, and how much.
+// via says how a saved board was reached: "board" from its private link, "lead" when a lead link
+// was reopened, so the visitor may not be the person who saved it.
 // Everything is checked again here: the worker trusts nothing it did not parse.
 import { isBoardId } from "../board.js";
 import { isValidSlug } from "../briefs.js";
@@ -14,6 +16,7 @@ export type CallMeta = {
   day: string | null;
   reservedUsd: number | null;
   board: string | null;
+  via?: "board" | "lead" | null;
 };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,5 +41,6 @@ export function parseCallMeta(raw: string | null | undefined): CallMeta {
     day: DAY.test(str(o.day)) ? str(o.day) : null,
     reservedUsd: typeof o.reservedUsd === "number" && Number.isFinite(o.reservedUsd) && o.reservedUsd >= 0 ? o.reservedUsd : null,
     board: isBoardId(o.board) ? o.board : null,
+    via: o.via === "board" || o.via === "lead" ? o.via : null,
   };
 }

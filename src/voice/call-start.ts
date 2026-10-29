@@ -3,6 +3,7 @@
 import { baselineOf, loadBoard, startFromBoard, type Baseline, type SavedStart } from "../board.js";
 import { loadBrief } from "../briefs.js";
 import type { KV } from "../kv.js";
+import { loadMemory, type CallMemory } from "../memory.js";
 import type { Brief } from "../notes.js";
 import type { CallMeta } from "./meta.js";
 
@@ -18,6 +19,9 @@ export type CallStart = {
   slug: string | null;
   baseline?: Baseline;
   proof?: Brief | null;
+  // On a revisit: the last call's name, role, recap and words, and how the board was reached.
+  memory?: CallMemory | null;
+  via?: "board" | "lead";
 };
 
 export async function callStart(kv: KV | null, meta: CallMeta): Promise<CallStart> {
@@ -25,6 +29,7 @@ export async function callStart(kv: KV | null, meta: CallMeta): Promise<CallStar
   if (board) {
     const slug = board.slug ?? meta.slug;
     const lead = await loadBrief(kv, slug);
+    const memory = await loadMemory(kv, meta.board);
     return {
       brief: null,
       saved: startFromBoard(board),
@@ -32,6 +37,8 @@ export async function callStart(kv: KV | null, meta: CallMeta): Promise<CallStar
       slug,
       baseline: baselineOf(board),
       ...(lead ? { proof: lead } : {}),
+      ...(memory ? { memory } : {}),
+      via: meta.via === "lead" ? "lead" : "board",
     };
   }
   const brief = await loadBrief(kv, meta.slug);

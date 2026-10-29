@@ -92,6 +92,7 @@ describe("call metadata", () => {
       day: "2026-10-05",
       reservedUsd: 0.75,
       board: null,
+      via: null,
     });
     expect(parseCallMeta('{"reservedUsd":0}').reservedUsd).toBe(0);
   });
@@ -107,8 +108,13 @@ describe("call metadata", () => {
     expect(parseCallMeta('{"board":"AbCdEfGhIjKlMnOpQr_-12"}').board).toBe("AbCdEfGhIjKlMnOpQr_-12");
     for (const bad of ['"short"', '"AbCdEfGhIjKlMnOpQr/-12"', "42", "null"]) expect(parseCallMeta(`{"board":${bad}}`).board, bad).toBeNull();
   });
+  it("reads how a saved board was reached, and drops anything else", () => {
+    expect(parseCallMeta('{"via":"lead"}').via).toBe("lead");
+    expect(parseCallMeta('{"via":"board"}').via).toBe("board");
+    for (const bad of ['"homepage"', "1", "null"]) expect(parseCallMeta(`{"via":${bad}}`).via, bad).toBeNull();
+  });
   it("treats anything missing or malformed as unknown", () => {
-    const none = { country: null, slug: null, email: null, day: null, reservedUsd: null, board: null };
+    const none = { country: null, slug: null, email: null, day: null, reservedUsd: null, board: null, via: null };
     for (const raw of [undefined, null, "", "not json", "[]", "null"]) expect(parseCallMeta(raw), String(raw)).toEqual(none);
     expect(parseCallMeta('{"country":"UAE","slug":"../x","email":"nope"}')).toEqual(none);
   });
