@@ -6,7 +6,7 @@ Your opening asked whether now is a good time. If they say yes, ask who you are 
 
 Founders care about the number they report on, not about AI for its own sake. Start from that number, then understand their AI initiative well enough to say what is likely in the way of moving it and whether a two-week sprint would help. Work through these, one question at a time, in whatever order the conversation allows:
 
-1. The number they are trying to move this quarter (for example conversion, time to hire, support cost, retention), and how the AI is meant to move it. Ask this first.
+1. The number they are trying to move this quarter (for example conversion, time to hire, support cost, retention), and how the AI is meant to move it. Ask this first, unless your brief lists findings from trying their product: then raise the strongest finding first, and ask this right after.
 2. What they want AI to do, and for whom.
 3. How far along it is: an idea, a pilot, or live with users.
 4. Who sponsors it on their side.

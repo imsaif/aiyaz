@@ -14,14 +14,20 @@ export function scrubForbiddenNames(text: string, names: string[]): string {
 }
 
 // True when the first turn says it is an AI agent before anything else: either it
-// opens with the disclosure, or only a "Hi <company>, " or "Welcome back, " greeting comes first.
-// A company name may end in a full stop ("Acme Inc."), so sentences are not split on it.
+// opens with the disclosure, or only a "Hi <company>, ", "Welcome back, " or "Welcome back, <name>, "
+// greeting comes first. A company name may end in a full stop ("Acme Inc."), so sentences are not
+// split on it. A name is one short run of letters (see cleanName in memory.ts).
 export function disclosesAtOpening(first: string, agentName: string): boolean {
   const line = `I'm ${agentName}, an AI agent.`;
   const at = first.indexOf(line);
   if (at < 0) return false;
   const before = first.slice(0, at);
-  return before === "" || before === "Welcome back, " || (/^Hi [^?!]{1,80}, $/.test(before) && !before.includes(". "));
+  return (
+    before === "" ||
+    before === "Welcome back, " ||
+    /^Welcome back, [\p{L}][\p{L} '’-]{0,39}, $/u.test(before) ||
+    (/^Hi [^?!]{1,80}, $/.test(before) && !before.includes(". "))
+  );
 }
 
 export function mentionsForbiddenName(text: string, names: string[]): boolean {

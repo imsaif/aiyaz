@@ -13,6 +13,7 @@ import { forCountry, loadSettings, type Settings } from "../config.js";
 import { Conversation } from "../conversation.js";
 import { kvFromEnv, kvMissingNotice } from "../kv.js";
 import { AnthropicLLM } from "../llm.js";
+import { rememberCall, writeRecap } from "../memory.js";
 import { JsonlTracer } from "../tracer.js";
 import { BOARD_TOPIC, BoardLink, boardSaver, EDIT_METHOD, editHandler, HELLO_METHOD, helloHandler } from "./board-link.js";
 import { BrainLLM } from "./brain-llm.js";
@@ -82,6 +83,8 @@ export default defineAgent({
       brief: begin.brief,
       start: begin.saved,
       proof: begin.proof ?? null,
+      memory: begin.memory ?? null,
+      via: begin.via ?? null,
       slug: begin.slug,
       emailKnown: meta.email !== null,
       // Called inside the Conversation's tool-result handling: it only queues, and never throws.
@@ -182,6 +185,25 @@ export default defineAgent({
       console.log(
         `[call] ${log.id} ${log.endReason} ${log.durationSec}s USD ${log.costUsd.toFixed(3)} country=${log.country ?? "?"} lead=${log.slug ? "yes" : "no"} revisit=${begin.saved ? "yes" : "no"}`,
       );
+      // Last, after the log and emails are safe: what the next call on this board greets with.
+      // The recap is one capped call to the cheaper model; a failure only loses the recap.
+      if (kv && meta.board) {
+        try {
+          const remembered = await rememberCall({
+            kv,
+            boardId: meta.board,
+            previous: begin.memory ?? null,
+            via: begin.via ?? null,
+            name: brain.notes.visitor_name,
+            role: brain.notes.visitor_role,
+            transcript: brain.transcript,
+            recap: (t) => writeRecap(new AnthropicLLM(settings.requestTimeoutMs), settings.fallbackModel, t, settings.forbiddenNames),
+          });
+          console.log(`[memory] ${brain.id} ${remembered ? `saved recap=${remembered.recap ? "yes" : "no"}` : "skipped"}`);
+        } catch (err) {
+          console.error(`[memory] ${brain.id} failed: ${err instanceof Error ? err.name : "error"}`);
+        }
+      }
     });
 
     // record: LiveKit Cloud session reports carry transcript and audio, so they stay off by default.

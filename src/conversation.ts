@@ -4,6 +4,7 @@ import { applyEdit, boardFromNotes, knownFromBrief, type Board, type KnownFact, 
 import type { Settings } from "./config.js";
 import { scrubForbiddenNames, withOnlySprintPrice } from "./guards.js";
 import { FallbackLLM, type LLMClient } from "./llm.js";
+import type { CallMemory } from "./memory.js";
 import { STAGES, applyNotesUpdate, emptyNotes, type Brief, type Notes, type NotesUpdate } from "./notes.js";
 import { costUsd } from "./prices.js";
 import { buildSystemPrompt, formatPrice, openingLine, type BuiltPrompt } from "./prompt.js";
@@ -103,6 +104,9 @@ export type ConversationDeps = {
   start?: SavedStart | null;
   // On a revisit: the lead brief, used only for our findings and proof (see call-start.ts).
   proof?: Brief | null;
+  // On a revisit: the last call (see memory.ts), and how the board was reached.
+  memory?: CallMemory | null;
+  via?: "board" | "lead" | null;
   // The lead tag, kept on the board so a revisit from another device stays a lead call.
   slug?: string | null;
   // The token carried the visitor's email, so the ending does not ask for it.
@@ -146,6 +150,8 @@ export class Conversation {
   private cutOffNote: string | null = null;
   private readonly slug: string | null;
   private readonly revisit: boolean;
+  private readonly memory: CallMemory | null;
+  private readonly via: "board" | "lead" | null;
   private readonly onBoard: (board: Board) => void;
   // Lines for the next <visitor_edits> block, and the edits themselves until the model has seen them.
   private editNotes: string[] = [];
@@ -157,7 +163,15 @@ export class Conversation {
     this.tracer = deps.tracer;
     this.brief = deps.brief ?? null;
     const saved = deps.start ?? null;
-    this.prompt = buildSystemPrompt(deps.settings, this.brief, { emailKnown: deps.emailKnown, saved, proof: deps.proof ?? null });
+    this.memory = saved ? (deps.memory ?? null) : null;
+    this.via = saved ? (deps.via ?? null) : null;
+    this.prompt = buildSystemPrompt(deps.settings, this.brief, {
+      emailKnown: deps.emailKnown,
+      saved,
+      proof: deps.proof ?? null,
+      memory: this.memory,
+      via: this.via,
+    });
     this.revisit = saved !== null;
     this.slug = deps.slug ?? null;
     this.onBoard = deps.onBoard ?? (() => undefined);
@@ -167,11 +181,17 @@ export class Conversation {
     this.log = deps.log ?? (() => undefined);
     this.startedAt = this.now();
     this.notes = saved ? structuredClone(saved.notes) : emptyNotes(this.brief);
+    // On the private board link the caller is the person from last time; on a reopened lead
+    // link they are not known until they confirm it.
+    if (this.memory && this.via !== "lead") {
+      this.notes.visitor_name ??= this.memory.name;
+      this.notes.visitor_role ??= this.memory.role;
+    }
   }
 
   // The opener is fixed text, so the AI disclosure never depends on the model.
   start(): string {
-    const opener = openingLine(this.settings, this.brief, { revisit: this.revisit });
+    const opener = openingLine(this.settings, this.brief, { revisit: this.revisit, memory: this.memory, via: this.via });
     this.messages.push({ role: "user", content: "(The prospect has opened the conversation.)" });
     this.messages.push({ role: "assistant", content: opener });
     this.transcript.push({ role: "aiyaz", text: opener });
