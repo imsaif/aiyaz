@@ -88,6 +88,15 @@ describe("remembering a call", () => {
     expect((await rememberCall(deps({ previous: memory, via: "board" })))?.name).toBe("Dana");
     expect((await rememberCall(deps({ previous: memory, via: "lead" })))?.name).toBeNull();
   });
+  it("on a reopened lead link, someone who is not the remembered person replaces the memory, even in a short call", async () => {
+    const short = talk.slice(0, 2);
+    const stranger = await rememberCall(deps({ previous: memory, via: "lead", transcript: short }));
+    expect(stranger).toMatchObject({ name: null, recap: null });
+    const other = await rememberCall(deps({ previous: memory, via: "lead", name: "Sam", transcript: short }));
+    expect(other).toMatchObject({ name: "Sam", recap: null });
+    // The same person confirming, in a short call, leaves the memory alone.
+    expect(await rememberCall(deps({ previous: memory, via: "lead", name: "dana", transcript: short }))).toBeNull();
+  });
   it("still saves when the recap fails", async () => {
     expect((await rememberCall(deps({ recap: async () => null })))?.recap).toBeNull();
   });
@@ -126,6 +135,9 @@ describe("greeting a returning visitor", () => {
     expect(disclosesAtOpening(line, "Aiyaz")).toBe(true);
     const prompt = buildSystemPrompt(settings, null, { saved, memory, via: "lead" }).text;
     expect(prompt).toContain("do not mention the last call or anything said in it");
+    // Only the one-line recap, not the last call's words, until they say who they are.
+    expect(prompt).toContain('- In one line: "the support bot answering in the wrong language"');
+    expect(prompt).not.toContain("I'll check that with the team.");
   });
   it("gives the model the last call as quoted data", () => {
     const prompt = buildSystemPrompt(settings, null, { saved, memory, via: "board" }).text;
