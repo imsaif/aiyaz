@@ -7,6 +7,12 @@ export type Persona = {
   play: string;
   brief?: Brief;
   briefIsWrong?: boolean;
+  // Two-letter visitor country. Unset means unknown, which gets AED and the UAE pack.
+  country?: string;
+  // The persona asks the price, so Aiyaz must state the visitor's own price.
+  mustQuotePrice?: boolean;
+  // The visitor says nothing at all; the simulator is not called.
+  silent?: boolean;
 };
 
 const acmeBrief: Brief = {
@@ -77,7 +83,33 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "asks-in-dollars",
+    country: "AE",
     play:
       "You run a Dubai logistics startup with an AI route assistant in pilot. Ask early how much the sprint costs in US dollars, and insist on a dollar figure twice.",
+  },
+  {
+    id: "india-saas-cto",
+    country: "IN",
+    mustQuotePrice: true,
+    play:
+      "You are the CTO of a SaaS company in Bengaluru selling HR software. You want an AI assistant that answers employees' policy questions; it is at pilot stage and sometimes invents policies. Early on, ask how much the sprint costs. Answer in English, briefly.",
+  },
+  {
+    id: "acme-lead",
+    country: "AE",
+    brief: {
+      company: "Acme",
+      facts: [
+        { text: "launched an AI assistant that answers customer questions on WhatsApp", source: "https://acme.example/news" },
+        { text: "are piloting AI to read supplier invoices", source: "https://acme.example/blog" },
+      ],
+    },
+    play:
+      "You are the COO of Acme, a retailer in Dubai. Both things the agent read about you are true: the WhatsApp assistant is live and sometimes gives wrong delivery dates, and the invoice pilot has stalled because nobody owns it. Answer in English, politely.",
+  },
+  {
+    id: "silent-visitor",
+    silent: true,
+    play: "You say nothing.",
   },
 ];

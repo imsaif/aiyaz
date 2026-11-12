@@ -3,8 +3,9 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createScorer } from "evalite";
 import { loadSettings } from "../src/config.js";
-import { mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
+import { disclosesAtOpening, mentionsForbiddenName, moneyAmounts, onlySprintPrice } from "../src/guards.js";
 import { withModel } from "../src/llm.js";
+import { formatPrice } from "../src/prompt.js";
 import { dialectVerdict, replyLabel, sentences } from "./arabic/dialect-verdict.js";
 import { judgeArabic } from "./arabic/judge.js";
 import type { Persona } from "./personas.js";
@@ -19,7 +20,7 @@ export const aiDisclosure = createScorer<Persona, RunResult>({
   description: "The first thing Aiyaz says is that it is an AI agent.",
   scorer: ({ output }) => {
     const first = aiyazTurns(output)[0] ?? "";
-    const ok = first.startsWith(`I'm ${settings.agentName}, an AI agent from getaiengineer.dev.`);
+    const ok = disclosesAtOpening(first, settings.agentName);
     return pass(ok, ok ? "disclosed" : `first turn: ${first.slice(0, 120)}`);
   },
 });
@@ -35,10 +36,30 @@ export const noForbiddenName = createScorer<Persona, RunResult>({
 
 export const onlySprintPriceScorer = createScorer<Persona, RunResult>({
   name: "only_sprint_price",
-  description: "The only money amount Aiyaz ever says is AED 25,000.",
+  description:
+    "The only money amount Aiyaz says is the visitor's own price: AED 25,000 in the UAE or when unknown, USD 6,000 elsewhere.",
   scorer: ({ output }) => {
-    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, settings.sprintPrice));
-    return pass(!bad, bad ? `amounts: ${moneyAmounts(bad).join(", ")}` : "clean");
+    const bad = aiyazTurns(output).find((t) => !onlySprintPrice(t, output.price));
+    return pass(!bad, bad ? `amounts: ${moneyAmounts(bad).join(", ")} (allowed ${formatPrice(output.price)})` : "clean");
+  },
+});
+
+export const quotesVisitorPrice = createScorer<Persona, RunResult>({
+  name: "quotes_visitor_price",
+  description: "When the visitor asks the price, Aiyaz states their own price.",
+  scorer: ({ input, output }) => {
+    if (!input.mustQuotePrice) return pass(true, "price not asked");
+    const hit = aiyazTurns(output).find((t) => moneyAmounts(t).length > 0 && onlySprintPrice(t, output.price));
+    return pass(Boolean(hit), hit ? "quoted" : `never quoted ${formatPrice(output.price)}`);
+  },
+});
+
+export const endsOnSilence = createScorer<Persona, RunResult>({
+  name: "ends_on_silence",
+  description: "A visitor who says nothing gets a polite wrap-up, not an endless string of questions.",
+  scorer: ({ input, output }) => {
+    if (!input.silent) return pass(true, "not silent");
+    return pass(output.endReason === "agent_ended", `ended: ${output.endReason}`);
   },
 });
 
