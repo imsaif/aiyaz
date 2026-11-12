@@ -3,7 +3,7 @@
 // Nothing here reads files. A bad or missing brief makes the call a homepage call.
 import { moneyAmounts } from "./guards.js";
 import type { KV } from "./kv.js";
-import { STAGES, type Brief, type BriefCards, type BriefEvidence, type BriefFact, type BriefFile } from "./notes.js";
+import { FINDING_ICONS, STAGES, type Brief, type BriefCards, type BriefEvidence, type BriefFact, type BriefFile, type FindingView } from "./notes.js";
 
 export const BRIEF_KEY = (slug: string) => `aiyaz:brief:${slug}`;
 
@@ -68,19 +68,50 @@ function toFile(v: unknown): BriefFile | undefined {
   return { href: v.href, label: (v.label as string).trim() };
 }
 
+
+// A finding's page layout. Every text field follows the caption rules (short, no money); a view
+// with any required field missing or bad is dropped whole, and the page falls back to the text.
+const MAX_VIEW_CHARS = 200;
+const okViewText = (t: unknown): t is string => okCaption(t) && (t as string).trim().length <= MAX_VIEW_CHARS;
+
+export function toView(v: unknown): FindingView | undefined {
+  if (!isObj(v)) return undefined;
+  const { label, icon, checked, headline, how, question } = v;
+  if (![label, checked, headline, how, question].every(okViewText)) return undefined;
+  if (typeof icon !== "string" || !(FINDING_ICONS as readonly string[]).includes(icon)) return undefined;
+  const out: FindingView = {
+    label: (label as string).trim(),
+    icon: icon as FindingView["icon"],
+    checked: (checked as string).trim(),
+    headline: (headline as string).trim(),
+    how: (how as string).trim(),
+    question: (question as string).trim(),
+  };
+  const q = v.quote;
+  if (isObj(q) && okViewText(q.who) && okViewText(q.text)) out.quote = { who: (q.who as string).trim(), text: (q.text as string).trim() };
+  const c = v.clip;
+  if (isObj(c) && typeof c.from === "number" && typeof c.to === "number" && c.from >= 0 && c.to > c.from && c.to <= 3600) out.clip = { from: c.from, to: c.to };
+  if (typeof v.proof === "string" && EVIDENCE_PATH.test(v.proof)) out.proof = v.proof;
+  return out;
+}
+
 export function toBrief(v: unknown): Brief | null {
   if (!isObj(v) || typeof v.company !== "string" || !Array.isArray(v.facts)) return null;
   const company = v.company.trim();
   if (!company || company.length > MAX_COMPANY_CHARS) return null;
   const facts = v.facts
     .filter(usableFact)
-    .map((f): BriefFact => ({ text: f.text.trim(), source: f.source.trim(), ...(f.kind === "finding" ? { kind: "finding" } : {}) }))
+    .map((f): BriefFact => {
+      const view = f.kind === "finding" ? toView((f as { view?: unknown }).view) : undefined;
+      return { text: f.text.trim(), source: f.source.trim(), ...(f.kind === "finding" ? { kind: "finding" } : {}), ...(view ? { view } : {}) };
+    })
     .slice(0, MAX_FACTS);
   const cards = toCards(v.cards);
   const evidence = toEvidence(v.evidence);
   const file = toFile(v.file);
+  const summary = okViewText(v.summary) ? (v.summary as string).trim() : undefined;
   if (!facts.length) return null;
-  return { company, facts, ...(cards ? { cards } : {}), ...(evidence ? { evidence } : {}), ...(file ? { file } : {}) };
+  return { company, facts, ...(cards ? { cards } : {}), ...(evidence ? { evidence } : {}), ...(file ? { file } : {}), ...(summary ? { summary } : {}) };
 }
 
 export async function loadBrief(kv: KV | null, slug: string | null): Promise<Brief | null> {

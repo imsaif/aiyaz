@@ -4,14 +4,30 @@ import { EMAIL } from "./voice/meta.js";
 // "about": a fact about the company that Aiyaz checks with them ("I read that... Is that right?").
 // "finding": what we saw when we tried their product from outside. Never asked back as a fact to
 // confirm; Aiyaz raises one or two as observations. Missing kind means "about" (older briefs).
-export type BriefFact = { text: string; source: string; kind?: "about" | "finding" };
+// How a finding is laid out on the lead page (added 2026-11-12). Page-only: Aiyaz still speaks
+// the finding's text. icon is one of FINDING_ICONS; clip is seconds into the brief's audio file;
+// proof is a transcript or screenshot on the site's /e/<slug>/ path.
+export const FINDING_ICONS = ["safety", "conversation", "handover", "team", "accuracy"] as const;
+export type FindingView = {
+  label: string;
+  icon: (typeof FINDING_ICONS)[number];
+  checked: string;
+  headline: string;
+  how: string;
+  question: string;
+  quote?: { who: string; text: string };
+  clip?: { from: number; to: number };
+  proof?: string;
+};
+export type BriefFact = { text: string; source: string; kind?: "about" | "finding"; view?: FindingView };
 // Cards the research already answers, shown filled on the page and confirmed on the call.
 export type BriefCards = { aiFeature?: string; users?: string; stage?: string };
 // Proof on the lead's page: screenshots from our test, and the test file they can run themselves.
 // Paths are on getaiengineer.dev under /e/<slug>/, served only to whoever has the lead link.
 export type BriefEvidence = { src: string; caption: string };
 export type BriefFile = { href: string; label: string };
-export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile };
+// summary: one short line beside the findings heading, e.g. how long each path took on the call.
+export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile; summary?: string };
 
 export const aboutFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind !== "finding");
 export const findingFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind === "finding");

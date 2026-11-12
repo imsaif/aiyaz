@@ -11,6 +11,9 @@ export type LeadRow = {
   cards?: Record<string, string>;
   evidence?: { src: string; caption: string }[];
   file?: { href: string; label: string };
+  // Page layout for each finding, in the order the findings appear in the facts cell.
+  views?: unknown[];
+  summary?: string;
 };
 export type PlannedBrief = { company: string; slug: string; isNew: boolean; brief: Brief | null; dropped: string[]; skipped?: string };
 
@@ -33,6 +36,13 @@ export function parseFactsCell(cell: string): { facts: BriefFact[]; dropped: str
     else dropped.push(part);
   }
   return { facts, dropped };
+}
+
+// Pairs the n-th view with the n-th finding; toBrief validates each view and drops a bad one.
+export function withViews(facts: BriefFact[], views: unknown[] | undefined): unknown[] {
+  if (!Array.isArray(views) || !views.length) return facts;
+  let i = 0;
+  return facts.map((f) => (f.kind === "finding" && i < views.length ? { ...f, view: views[i++] } : f));
 }
 
 export function companyKey(company: string): string {
@@ -106,7 +116,7 @@ export async function planBriefs(
       company: row.company,
       slug: existing ?? newSlug(row.company, rand),
       isNew: !existing,
-      brief: toBrief({ company: row.company, facts, cards: row.cards, evidence: row.evidence, file: row.file }),
+      brief: toBrief({ company: row.company, facts: withViews(facts, row.views), cards: row.cards, evidence: row.evidence, file: row.file, summary: row.summary }),
       dropped,
     });
   }

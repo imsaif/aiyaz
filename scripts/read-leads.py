@@ -23,6 +23,16 @@ if sys.argv[1].endswith(".csv"):
             ev = [p.split("|", 1) for p in (r.get("aiyaz_evidence") or "").split(";") if "|" in p]
             if ev:
                 row["evidence"] = [{"src": s.strip(), "caption": c.strip()} for s, c in ev]
+            # Page layout for the findings (JSON list, one per finding in order) and a summary line.
+            vw = (r.get("aiyaz_findings_view") or "").strip()
+            if vw:
+                try:
+                    row["views"] = json.loads(vw)
+                except ValueError:
+                    print(f"{r['company']}: aiyaz_findings_view is not valid JSON, ignored", file=sys.stderr)
+            sm = (r.get("aiyaz_summary") or "").strip()
+            if sm:
+                row["summary"] = sm
             fl = (r.get("aiyaz_file") or "").split("|", 1)
             if len(fl) == 2:
                 row["file"] = {"href": fl[0].strip(), "label": fl[1].strip()}
