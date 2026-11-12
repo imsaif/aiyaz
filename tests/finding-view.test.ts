@@ -70,3 +70,29 @@ describe("finding view", () => {
     expect(text).not.toContain("does it ask safety questions first?");
   });
 });
+
+describe("evaluation plan", () => {
+  it("keeps known areas once, drops money and unknown icons, and stays off the prompt", () => {
+    const b = toBrief({
+      ...base,
+      evaluate: {
+        intro: "In the sprint we test five areas.",
+        areas: [
+          { area: "uncertainty", how: "whether it asks first", seen: { label: "patient safety", icon: "safety" } },
+          { area: "uncertainty", how: "duplicate" },
+          { area: "edge", how: "mixed languages", seen: { label: "x", icon: "rocket" } },
+          { area: "after", how: "costs AED 9,000 to rerun" },
+          { area: "magic", how: "not an area" },
+        ],
+      },
+    });
+    expect(b?.evaluate).toEqual({
+      intro: "In the sprint we test five areas.",
+      areas: [
+        { area: "uncertainty", how: "whether it asks first", seen: { label: "patient safety", icon: "safety" } },
+        { area: "edge", how: "mixed languages" },
+      ],
+    });
+    expect(buildSystemPrompt(loadSettings(), b).text).not.toContain("whether it asks first");
+  });
+});

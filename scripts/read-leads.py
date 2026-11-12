@@ -30,6 +30,12 @@ if sys.argv[1].endswith(".csv"):
                     row["views"] = json.loads(vw)
                 except ValueError:
                     print(f"{r['company']}: aiyaz_findings_view is not valid JSON, ignored", file=sys.stderr)
+            ev_plan = (r.get("aiyaz_evaluate") or "").strip()
+            if ev_plan:
+                try:
+                    row["evaluate"] = json.loads(ev_plan)
+                except ValueError:
+                    print(f"{r['company']}: aiyaz_evaluate is not valid JSON, ignored", file=sys.stderr)
             sm = (r.get("aiyaz_summary") or "").strip()
             if sm:
                 row["summary"] = sm

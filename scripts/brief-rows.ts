@@ -14,6 +14,7 @@ export type LeadRow = {
   // Page layout for each finding, in the order the findings appear in the facts cell.
   views?: unknown[];
   summary?: string;
+  evaluate?: unknown;
 };
 export type PlannedBrief = { company: string; slug: string; isNew: boolean; brief: Brief | null; dropped: string[]; skipped?: string };
 
@@ -116,7 +117,7 @@ export async function planBriefs(
       company: row.company,
       slug: existing ?? newSlug(row.company, rand),
       isNew: !existing,
-      brief: toBrief({ company: row.company, facts: withViews(facts, row.views), cards: row.cards, evidence: row.evidence, file: row.file, summary: row.summary }),
+      brief: toBrief({ company: row.company, facts: withViews(facts, row.views), cards: row.cards, evidence: row.evidence, file: row.file, summary: row.summary, evaluate: row.evaluate }),
       dropped,
     });
   }

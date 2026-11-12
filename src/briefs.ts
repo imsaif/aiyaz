@@ -3,7 +3,7 @@
 // Nothing here reads files. A bad or missing brief makes the call a homepage call.
 import { moneyAmounts } from "./guards.js";
 import type { KV } from "./kv.js";
-import { FINDING_ICONS, STAGES, type Brief, type BriefCards, type BriefEvidence, type BriefFact, type BriefFile, type FindingView } from "./notes.js";
+import { EVAL_AREAS, FINDING_ICONS, STAGES, type BriefEvaluate, type EvalArea, type Brief, type BriefCards, type BriefEvidence, type BriefFact, type BriefFile, type FindingView } from "./notes.js";
 
 export const BRIEF_KEY = (slug: string) => `aiyaz:brief:${slug}`;
 
@@ -95,6 +95,26 @@ export function toView(v: unknown): FindingView | undefined {
   return out;
 }
 
+
+// What we'd evaluate (page-only): known areas once each, text like captions, a seen tag only with a known icon.
+export function toEvaluate(v: unknown): BriefEvaluate | undefined {
+  if (!isObj(v)) return undefined;
+  const intro = okViewText(v.intro) ? (v.intro as string).trim() : undefined;
+  const used = new Set<string>();
+  const areas: EvalArea[] = [];
+  for (const a of Array.isArray(v.areas) ? v.areas : []) {
+    if (!isObj(a) || typeof a.area !== "string" || !(EVAL_AREAS as readonly string[]).includes(a.area) || used.has(a.area) || !okViewText(a.how)) continue;
+    used.add(a.area);
+    const s = a.seen;
+    const seen = isObj(s) && okViewText(s.label) && typeof s.icon === "string" && (FINDING_ICONS as readonly string[]).includes(s.icon)
+      ? { label: (s.label as string).trim(), icon: s.icon as FindingView["icon"] }
+      : undefined;
+    areas.push({ area: a.area as EvalArea["area"], how: (a.how as string).trim(), ...(seen ? { seen } : {}) });
+  }
+  if (!intro && !areas.length) return undefined;
+  return { ...(intro ? { intro } : {}), areas };
+}
+
 export function toBrief(v: unknown): Brief | null {
   if (!isObj(v) || typeof v.company !== "string" || !Array.isArray(v.facts)) return null;
   const company = v.company.trim();
@@ -110,8 +130,9 @@ export function toBrief(v: unknown): Brief | null {
   const evidence = toEvidence(v.evidence);
   const file = toFile(v.file);
   const summary = okViewText(v.summary) ? (v.summary as string).trim() : undefined;
+  const evaluate = toEvaluate(v.evaluate);
   if (!facts.length) return null;
-  return { company, facts, ...(cards ? { cards } : {}), ...(evidence ? { evidence } : {}), ...(file ? { file } : {}), ...(summary ? { summary } : {}) };
+  return { company, facts, ...(cards ? { cards } : {}), ...(evidence ? { evidence } : {}), ...(file ? { file } : {}), ...(summary ? { summary } : {}), ...(evaluate ? { evaluate } : {}) };
 }
 
 export async function loadBrief(kv: KV | null, slug: string | null): Promise<Brief | null> {

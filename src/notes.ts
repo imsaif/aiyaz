@@ -27,7 +27,11 @@ export type BriefCards = { aiFeature?: string; users?: string; stage?: string };
 export type BriefEvidence = { src: string; caption: string };
 export type BriefFile = { href: string; label: string };
 // summary: one short line beside the findings heading, e.g. how long each path took on the call.
-export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile; summary?: string };
+// What we'd evaluate for this lead (page-only): how we'd test each area, and the finding it showed up in.
+export const EVAL_AREAS = ["uncertainty", "edge", "review", "accuracy", "after"] as const;
+export type EvalArea = { area: (typeof EVAL_AREAS)[number]; how: string; seen?: { label: string; icon: FindingView["icon"] } };
+export type BriefEvaluate = { intro?: string; areas: EvalArea[] };
+export type Brief = { company: string; facts: BriefFact[]; cards?: BriefCards; evidence?: BriefEvidence[]; file?: BriefFile; summary?: string; evaluate?: BriefEvaluate };
 
 export const aboutFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind !== "finding");
 export const findingFacts = (brief: Brief | null): BriefFact[] => (brief?.facts ?? []).filter((f) => f.kind === "finding");
